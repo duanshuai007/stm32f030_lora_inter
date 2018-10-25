@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+
+<userOverrides>
+  <override>
+    <path>C:\Users\Administrator\Personal\lora\endpoint1\Drivers\STM32F0xx_HAL_Driver\Src\stm32f0xx_hal_dma.c</path>
+    <encoding>UTF-8</encoding>
+  </override>
+  <override>
+    <path>C:\Users\Administrator\Personal\lora\endpoint1\Inc\Lora.h</path>
+    <encoding>UTF-8</encoding>
+  </override>
+  <override>
+    <path>C:\Users\Administrator\Personal\lora\endpoint1\Inc\user_config.h</path>
+    <encoding>UTF-8</encoding>
+  </override>
+  <override>
+    <path>C:\Users\Administrator\Personal\lora\endpoint1\Src\Lora.c</path>
+    <encoding>UTF-8</encoding>
+  </override>
+  <override>
+    <path>C:\Users\Administrator\Personal\lora\endpoint1\Src\crc16.c</path>
+    <encoding>UTF-8</encoding>
+  </override>
+  <override>
+    <path>C:\Users\Administrator\Personal\lora\endpoint1\Src\hardware.c</path>
+    <encoding>System</encoding>
+  </override>
+  <override>
+    <path>C:\Users\Administrator\Personal\lora\endpoint1\Src\lowpower.c</path>
+    <encoding>UTF-8</encoding>
+  </override>
+  <override>
+    <path>C:\Users\Administrator\Personal\lora\endpoint1\Src\main.c</path>
+    <encoding>UTF-8</encoding>
+  </override>
+  <override>
+    <path>C:\Users\Administrator\Personal\lora\endpoint1\Src\motor.c</path>
+    <encoding>UTF-8</encoding>
+  </override>
+  <override>
+    <path>C:\Users\Administrator\Personal\lora\endpoint1\Src\stm32f0xx_hal_msp.c</path>
+    <encoding>UTF-8</encoding>
+  </override>
+  <override>
+    <path>C:\Users\Administrator\Personal\lora\endpoint1\Src\stm32f0xx_it.c</path>
+    <encoding>UTF-8</encoding>
+  </override>
+</userOverrides>
+
+
