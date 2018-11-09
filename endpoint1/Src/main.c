@@ -69,11 +69,6 @@ RTC_HandleTypeDef hrtc;
 LoraPacket gLoraPacket;
 Device gDevice;
 DataPool *gUartDataPool;
-//uint32_t gCount = 0;
-//uint8_t gRtcFlag = 0;
-//uint8_t gInterFlag = 0;   //电机异常动作标志
-volatile uint8_t gOnlineFlag = 0;  //在线标志
-volatile uint8_t gMode = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -102,7 +97,7 @@ static void MX_RTC_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-  
+  uint8_t mode = 0;
   /* USER CODE END 1 */
   
   /* MCU Configuration----------------------------------------------------------*/
@@ -132,7 +127,7 @@ int main(void)
   //低功耗模式下调试延时，如果不加很难再次刷程序
   HAL_Delay(5000);
   
-  gUartDataPool = DataPoolInit(128);
+  gUartDataPool = DataPoolInit(MAX_DMA_LEN);
   motor_init();
   
   LoraSetParamter( &gLoraPacket,
@@ -146,7 +141,7 @@ int main(void)
   
   LoraReadParamter( &gLoraPacket );
   
-  CloseNotUsedPeriphClock();
+  //CloseNotUsedPeriphClock();
   //串口重初始化
   UART_ReInit(&huart1);
   
@@ -155,7 +150,8 @@ int main(void)
     if(LoraRegister())
       break;
 
-    rtc_set_timer(10);
+    rtc_set_timer(7);
+    
     LowPowerInit(1);
     HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
     //时钟配置清空
@@ -169,6 +165,7 @@ int main(void)
     MX_DMA_Init();
     //串口重新配置
     UART_ReInit(&huart1);
+//    HAL_Delay(1000);
   }
   /* USER CODE END 2 */
   
@@ -182,7 +179,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
     //理想情况是，有数据的时侯aux会输出低电压
     //延迟2-3ms后数据??串口发送给mcu
-    LowPowerInit(gMode);
+    LowPowerInit(mode);
     HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
     //while(gLoraPacket.isIdle);
     
@@ -207,13 +204,13 @@ int main(void)
     
     //判断系统唤醒类型，分别是adc中断唤醒，电机检测引脚中断唤醿
     //和aux引脚中断唤醒
-    if (gMode) {
+    if (mode) {
       //在这唤醒的话那么就执行发送函数发送回应的数据
       if ( SyncCMDDone() == 1) {
-        gMode = 0;
+        mode = 0;
       }
     } else {
-      gMode = ProcessTheData();
+      mode = ProcessTheData();
     }
   }
   /* USER CODE END 3 */

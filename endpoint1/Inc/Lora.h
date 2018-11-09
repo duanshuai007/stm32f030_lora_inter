@@ -8,7 +8,7 @@
 
 #define USE_INTERRUPT
 
-#define MAX_DMA_LEN     128
+#define MAX_DMA_LEN     64
 
 #define NORMALCMD   1
 #define RECMD       0

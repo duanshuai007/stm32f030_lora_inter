@@ -13,8 +13,6 @@ Motor motor;
 
 extern Device gDevice;
 extern TIM_HandleTypeDef htim6;
-extern uint8_t gInterFlag;
-extern uint8_t gMode;
 
 //传感器的四个状态 旧版本地锁
 //up    down
@@ -277,10 +275,10 @@ MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd)
     //电机控制超时定时器，这里使用rtc来实现
     if ( motor.status == MOTOR_HOUQING ) {
       //            timer_set(&motor.ctrl_timer, 100);
-      rtc_set_timer(10);
+      rtc_set_timer(7);
     } else {
       //            timer_set(&motor.ctrl_timer, 50);
-      rtc_set_timer(5);
+      rtc_set_timer(4);
     }
   }
   

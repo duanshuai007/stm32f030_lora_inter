@@ -10,8 +10,15 @@ void rtc_disable(void)
     HAL_RTC_DeactivateAlarm(&hrtc, RTC_ALARM_A);
 }
 
+/*
+*   不知道是什么原因，现在最大的rtc定时是7+1秒，
+*   传入的参数不能超过7
+*/
 void rtc_set_timer(uint8_t time)
 { 
+    if ( time > 7 ) 
+      time = 7;
+    
     RTC_TimeTypeDef sTime;
     RTC_DateTypeDef sDate;
     RTC_AlarmTypeDef sAlarm;

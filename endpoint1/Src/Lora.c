@@ -18,8 +18,6 @@ extern LoraPacket       gLoraPacket;
 extern Device           gDevice;
 extern DMA_HandleTypeDef hdma_usart1_rx;
 extern DataPool *gUartDataPool;
-extern uint8_t gOnlineFlag;
-extern uint8_t gMode;
 
 /*
 *       AUX高电平表示空闲状态，低电平表示忙状态
@@ -559,8 +557,8 @@ uint8_t LoraRegister(void)
   ptr->u16Crc = CRC16_IBM((uint8_t *)ptr, SERVER_REC_RESP_LEN - 3);
   ptr->u8Tail = LORA_MSG_TAIL;
   
-  if ( HAL_OK == HAL_UART_Transmit(&huart1, gLoraPacket.dma_sbuff, ptr->u8Len + 3, 1000)) {
-    if ( HAL_OK == HAL_UART_Receive(&huart1, buffer, 12, 1000) ) {
+  if ( HAL_OK == HAL_UART_Transmit(&huart1, gLoraPacket.dma_sbuff, ptr->u8Len + 3, 100)) {
+    if ( HAL_OK == HAL_UART_Receive(&huart1, buffer, 12, 2000) ) {
     
       CmdDataPacket *cmd = (CmdDataPacket *)buffer;
       if(cmd->u8Cmd == HW_DEVICE_ONLINE)
@@ -649,14 +647,12 @@ void UartDataProcess(void)
           if ( crc == cmd->u16Crc ) {
             retry = 0;
             //接收到正确的消息
-            if ( cmd->u8Cmd == HW_DEVICE_ONLINE ) {
-              //接收到服务器发回来的上线响应，设备成功上线
-              gDevice.u8Cmd = HW_CMD_NONE;
-              gOnlineFlag = 1;
-            } else if ((gDevice.u8Cmd != HW_CMD_NONE) && (gDevice.u8CmdRunning == CMD_RUN)) {
+            if ((gDevice.u8Cmd != HW_CMD_NONE) && (gDevice.u8CmdRunning == CMD_RUN)) {
               gDevice.u8ReCmdFlag = 1;
               gDevice.u8ReCmd = cmd->u8Cmd;
               gDevice.u32ReIdentify = cmd->u32Identify;
+            } else if (cmd->u8Cmd == HW_DEVICE_ONLINE ) {
+              //do nothing
             } else {
               gDevice.u8Cmd = cmd->u8Cmd;
               gDevice.u32Identify = cmd->u32Identify;
