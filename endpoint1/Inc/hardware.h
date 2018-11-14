@@ -8,31 +8,31 @@
 typedef enum {
   HW_CMD_NONE       = 0,
   HW_MOTOR_UP       = 1,
-  //返回值：  0   UP 成功
-  //          1   UP 失败，地锁依然处于卧倒状态
-  //          2   UP 失败，地锁处于前倾的状态
-  //          4   UP 失败，地锁处于后倾的状态
+  //����ֵ��  0   UP �ɹ�
+  //          1   UP ʧ�ܣ�������Ȼ�����Ե�״̬
+  //          2   UP ʧ�ܣ���������ǰ���״̬
+  //          4   UP ʧ�ܣ��������ں����״̬
   HW_MOTOR_DOWN     = 2,
-  //返回值    0   DOWN 成功
-  //          2   DOWN 失败，地锁处于前倾状态
-  //          3   DOWN 失败，地锁处于直立状态
-  //          4   DOWN 失败，地锁处于后倾状态
+  //����ֵ    0   DOWN �ɹ�
+  //          2   DOWN ʧ�ܣ���������ǰ��״̬
+  //          3   DOWN ʧ�ܣ���������ֱ��״̬
+  //          4   DOWN ʧ�ܣ��������ں���״̬
   HW_MOTOR_GET      = 3,
-  //返回值    1   地锁处于卧倒状态
-  //          2   丢哦处于前倾状态
-  //          3   地锁处于直立状态
-  //          4   地锁处于后倾状态
+  //����ֵ    1   ���������Ե�״̬
+  //          2   ��Ŷ����ǰ��״̬
+  //          3   ��������ֱ��״̬
+  //          4   �������ں���״̬
   HW_BEEP_ON        = 4,
-  //返回值    0   蜂鸣器打开成功
-  //          1   蜂鸣器打开失败
+  //����ֵ    0   �������򿪳ɹ�
+  //          1   ��������ʧ��
   HW_BEEP_OFF       = 5,
-  //返回值    0   蜂鸣器关闭成功
-  //          1   蜂鸣器关闭失败
+  //����ֵ    0   �������رճɹ�
+  //          1   �������ر�ʧ��
   HW_BEEP_GET       = 6,
-  //返回值    1   蜂鸣器处于打开状态
-  //          0   蜂鸣器处于关闭状态
+  //����ֵ    1   ���������ڴ�״̬
+  //          0   ���������ڹر�״̬
   HW_ADC_GET        = 7,
-  //返回值    电池电压转换后的代表电量的数值(0-100)
+  //����ֵ    ��ص�ѹת����Ĵ�����������ֵ(0-100)
   HW_MOTOR_ABNORMAL = 8,
   HW_DEVICE_ONLINE  = 9,
   HW_DEVICE_HEART = 10,
@@ -46,6 +46,7 @@ typedef enum {
   MOTOR_UP        = 3,
   MOTOR_HOUQING   = 4,
   MOTOR_RUN = 99,
+  MOTOR_DONTDO = 0xff,
 } MOTOR_STATUS;
 
 typedef enum {

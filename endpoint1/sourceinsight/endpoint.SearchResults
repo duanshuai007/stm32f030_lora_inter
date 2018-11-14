@@ -1,0 +1,9 @@
+---- MOTOR_RUN Matches (2 in 2 files) ----
+Hardware.h (inc):48
+  MOTOR_RUN = 99,
+} MOTOR_STATUS;
+
+Lowpower.c (src):376
+                gDevice.u8Resp = MOTOR_RUN;
+                LoraTransfer(&gDevice, NORMALCMD);
+              } else {

@@ -8,6 +8,7 @@
 
 #include "rtc.h"
 #include "user_config.h"
+#include "Lora.h"
 
 Motor motor;
 
@@ -21,12 +22,6 @@ extern TIM_HandleTypeDef htim6;
 //0     1       前倾状态
 //1     1       卧倒状态
 
-uint32_t gsu32_time_inter = 0;    //最近两次中断的间隔
-uint32_t gsu32_last_time = 0;       //上一次中断发生的时间
-uint8_t gsu8_count = 0;             //当中断持续不断的触发时，会隔一段时间允许发一次通知
-bool isDelay = false;         //延迟发送标志，当出现了第一次延迟发送时就需要置为true
-
-//定时器周期100ms
 static void motor_stop(void)
 {
   HAL_GPIO_WritePin(GPIO_SENSOR_FORWARE, GPIO_SENSOR_FORWARE_PIN, GPIO_PIN_RESET);
@@ -39,21 +34,6 @@ static void sensor_switch(bool b)
     HAL_GPIO_WritePin(GPIO_SENSOR_SWITCH, GPIO_SENSOR_SWITCH_PIN, GPIO_PIN_SET);
   else
     HAL_GPIO_WritePin(GPIO_SENSOR_SWITCH, GPIO_SENSOR_SWITCH_PIN, GPIO_PIN_RESET);
-}
-
-//定时器最小定时单位100ms
-static void timer_disable(motor_timer *mt)
-{
-  mt->enable = false;
-  mt->cur_count = 0;
-  mt->max_count = 0;
-}
-
-static void timer_set(motor_timer *mt, uint8_t time)
-{
-  mt->max_count = time;       //延时时间=time×100ms
-  mt->enable = true;
-  HAL_TIM_Base_Start_IT(&htim6);
 }
 
 static MOTOR_STATUS get_status(void)
@@ -90,7 +70,6 @@ static MOTOR_STATUS get_status(void)
     }
   }
 #endif
-  return MOTOR_OK;
 }
 
 bool motor_runrun(uint8_t state, MOTOR_CMD cmd)
@@ -137,9 +116,8 @@ void motor_gpio_cb(uint16_t pin)
     //3 = 直立
     //4 = 后倾
     if (MOTOR_CMD_UP == motor.action){
-      if ((MOTOR_UP == status) || (motor.can_stop == status)){
+      if ((MOTOR_UP == status) || (motor.can_stop == status)) {
         motor_stop();
-        //                timer_disable(&motor.ctrl_timer);
         rtc_disable();
         motor.status = MOTOR_UP;
         motor.action = MOTOR_CMD_IDLE;
@@ -148,11 +126,11 @@ void motor_gpio_cb(uint16_t pin)
       }
     } else if (MOTOR_CMD_DOWN == motor.action){
       if (MOTOR_DOWN == status) {
-        HAL_Delay(5);       //延时时间是当地锁落下时如果有东西挡住了，会出现检测到DOWN位置的状
+//        HAL_Delay(1);   //经过测试，在stm32f103休眠模式方式工作时，会导致地锁倒下时不能正常的停止。
+        //延时时间是当地锁落下时如果有东西挡住了，会出现检测到DOWN位置的状
         //所以需要短暂延时后再判断一下
         if (get_status() == status) {
           motor_stop();
-          //                    timer_disable(&motor.ctrl_timer);
           rtc_disable();
           motor.status = MOTOR_DOWN;
           motor.action = MOTOR_CMD_IDLE;
@@ -162,54 +140,10 @@ void motor_gpio_cb(uint16_t pin)
       }
     } else {   //没有收到命令，但是产生了动作
       
-      //电机有异常动作，设置异常动作标志，使cpu不进入休眠
-//      gInterFlag = 1;
-//      gMode = 1;
-      
+      //电机有异常动作，设置异常动作标志
+      gDevice.u8InteFlag = 1;
       motor.status = status;
-      uint32_t curTime = HAL_GetTick();
-      gsu32_time_inter = curTime - gsu32_last_time;
-      gsu32_last_time = curTime;
-      
-      if (( gsu32_time_inter < 200) || (true == isDelay )) {
-        gsu8_count++;
-        if ( gsu8_count < 10 ) {
-          timer_disable(&motor.xiaodou_timer);
-          timer_set(&motor.xiaodou_timer, 2);
-          isDelay = true;
-        }
-      } else {
-        gsu8_count = 0;
-        timer_disable(&motor.xiaodou_timer);
-        timer_set(&motor.xiaodou_timer, 1);
-      }
     }
-  }
-}
-
-static void motor_timer_gpio_xiaodou_cb(void)
-{
-  if (motor.xiaodou_timer.enable == false)
-    return;
-  
-  motor.xiaodou_timer.cur_count++;
-  
-  if (motor.xiaodou_timer.cur_count < motor.xiaodou_timer.max_count) {
-    return;
-  } else {
-    isDelay = false;
-    gsu8_count = 0;
-    
-    timer_disable(&motor.xiaodou_timer);
-    
-    if (motor.status != motor.last_status) {
-      motor.last_status = motor.status;
-      motor.check_cb((MOTOR_CB_TYPE)motor.status);
-    }
-  }
-  
-  if (motor.xiaodou_timer.enable == false) {
-    HAL_TIM_Base_Stop_IT(&htim6);
   }
 }
 
@@ -229,23 +163,9 @@ static void motor_timer_ctrl_timeout_cb(void)
   motor.action = MOTOR_CMD_IDLE;
 }
 
-//地锁产生异常动作时会在gpio_cb内调用该函数
-static void motor_check_cb(MOTOR_CB_TYPE m)
-{
-  //    MOTOR_TaskPost(INTER_RESP_TYPE, hr);
-  //触发了电机异常动作后因为此时地锁应该处于无命令时期
-  //所以需要设置对应的标志位让程序能够发送异常resp
-  gDevice.u8Cmd = HW_MOTOR_ABNORMAL;
-  gDevice.u8CmdRunning = CMD_RUN;
-  gDevice.u8Resp = m;
-  gDevice.u8CmdDone = 1;
-  
-}
-
 //地锁接受命令执行后会调用该函数向服务器发送resp
 static void motor_ctrl_cb(MOTOR_CB_TYPE m)
 {
-  //    MOTOR_TaskPost(ACTION_RESP_TYPE, hr);
   gDevice.u8Resp = m;
   gDevice.u8CmdDone = 1;
 }
@@ -268,26 +188,19 @@ MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd)
       motor.can_stop = MOTOR_QIANQING;
     }
   }
-  
+
   if (motor_runrun(motor.status, cmd) == true)
   {
-    //        timer_disable(&motor.ctrl_timer);
     //电机控制超时定时器，这里使用rtc来实现
     if ( motor.status == MOTOR_HOUQING ) {
-      //            timer_set(&motor.ctrl_timer, 100);
-      rtc_set_timer(7);
+      rtc_set_timer(8);
     } else {
-      //            timer_set(&motor.ctrl_timer, 50);
-      rtc_set_timer(4);
+      rtc_set_timer(5);
     }
+    return MOTOR_OK; 
+  } else {
+    return MOTOR_DONTDO;
   }
-  
-  return MOTOR_OK;
-}
-
-static void motor_check_cb_register(motor_check_callback cb)
-{
-  motor.check_cb = cb;
 }
 
 static void motor_ctrl_cb_register(motor_ctrl_callback cb)
@@ -312,8 +225,6 @@ void motor_init(void)
   motor.last_status = motor.status;
   //注册中断控制回调函数，被引脚中断回调函数调用
   motor_ctrl_cb_register(motor_ctrl_cb);
-  //注册异常动作回调函数，被控制超时回调函数调用
-  motor_check_cb_register(motor_check_cb);
   //注册引脚中断回调函数，该函数为中断内调用。
   motor_gpio_cb_register(motor_gpio_cb);
   
@@ -322,7 +233,6 @@ void motor_init(void)
   motor.xiaodou_timer.cur_count = 0;
   motor.xiaodou_timer.max_count = 0;
   
-  motor.xiaodou_timer_cb = motor_timer_gpio_xiaodou_cb;
   motor.ctrl_timer_cb = motor_timer_ctrl_timeout_cb;
 }
 
@@ -333,3 +243,87 @@ MOTOR_STATUS motor_get_status(void)
   }
   return get_status();
 }
+
+void motor_input_pin_off_interrupt(bool b)
+{
+  GPIO_PinState pin1, pin2;
+    
+  GPIO_InitTypeDef GPIO_InitStruct;
+  HAL_NVIC_DisableIRQ(EXTI4_15_IRQn);
+
+  /*Configure GPIO pins : PA4 PA5 */
+  if( true == b ) {
+    //close interrupt
+    pin1 = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4);
+    pin2 = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5);
+    //pa4
+    GPIO_InitStruct.Pin = GPIO_PIN_4;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    if ( pin1 == GPIO_PIN_SET ) {
+      GPIO_InitStruct.Pull = GPIO_PULLUP;
+    } else {
+      GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+    }
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    //pa5
+    GPIO_InitStruct.Pin = GPIO_PIN_5;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    if ( pin2 == GPIO_PIN_SET ) {
+      GPIO_InitStruct.Pull = GPIO_PULLUP;
+    } else {
+      GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+    }
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct); 
+  } else {
+    //如果是使能中断，就要先开启电源。
+    sensor_switch(true);
+    HAL_Delay(100);
+    GPIO_InitStruct.Pin = GPIO_PIN_4 | GPIO_PIN_5;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  }
+  
+  HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
+  //如果是关闭中断，则需要后切断电源
+  if ( true == b ) {
+    sensor_switch(false);
+  }
+}
+
+static void LoraSendAbnormalMSG(void)
+{
+  gDevice.u8Cmd = HW_MOTOR_ABNORMAL;
+  gDevice.u8Resp = motor.status;
+  
+  LoraTransfer(&gDevice, NORMALCMD);
+  
+  gDevice.u8Cmd = HW_CMD_NONE;
+  gDevice.u8Resp = 0;
+}
+
+uint8_t motor_abnormal(void)
+{
+  //如果发现了异常动作标志
+  if ((gDevice.u8InteFlag == 1) && (gDevice.u8InterDone == 0)) {
+    motor_input_pin_off_interrupt(true);
+    rtc_set_timer(1);
+    gDevice.u8InteFlag = 0;
+    gDevice.u8InterDone = 1;
+    return 1;
+  } else if ( gDevice.u8InterDone ) {
+    //唤醒后
+    gDevice.u8InterDone = 0;
+    motor_input_pin_off_interrupt(false);
+    //do resp
+    
+    if ( motor.status != motor.last_status ) {
+      LoraSendAbnormalMSG();
+      motor.last_status = motor.status;
+    }
+    return 0;
+  }
+  
+  return 0;
+}
+

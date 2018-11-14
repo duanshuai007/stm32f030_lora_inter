@@ -76,9 +76,8 @@ typedef struct {
   
     Lora_Mode           mode;   //work mode
     LoraPar             paramter;
-    LoraVersion         version;
-    
-    uint8_t             dma_sbuff[MAX_DMA_LEN/4]; //dma send buffer
+
+    uint8_t             dma_sbuff[20]; //dma send buffer
     uint8_t             dma_rbuff[MAX_DMA_LEN]; //dma receive buffer
 } LoraPacket;
 

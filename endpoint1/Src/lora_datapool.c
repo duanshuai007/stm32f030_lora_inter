@@ -11,14 +11,14 @@ DataPool *DataPoolInit(uint16_t size)
   DataPool *ldp = (DataPool *)malloc(sizeof(DataPool));
   if ( ldp == NULL )
   {
-    printf("ldp null\r\n");
+//    printf("ldp null\r\n");
     return NULL;
   }
   memset(ldp, 0, sizeof(DataPool));
   
   ldp->pool = (uint8_t *)malloc(sizeof(uint8_t) * size);
   if ( ldp->pool == NULL ) {
-    printf("ldp->pool null\r\n");
+//    printf("ldp->pool null\r\n");
     free(ldp);
     return NULL;
   }

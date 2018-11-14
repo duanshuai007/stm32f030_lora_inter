@@ -65,10 +65,10 @@ DMA_HandleTypeDef hdma_usart1_tx;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-RTC_HandleTypeDef hrtc;
 LoraPacket gLoraPacket;
 Device gDevice;
 DataPool *gUartDataPool;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -98,6 +98,7 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
   uint8_t mode = 0;
+  uint8_t flag = 0;
   /* USER CODE END 1 */
   
   /* MCU Configuration----------------------------------------------------------*/
@@ -106,7 +107,7 @@ int main(void)
   HAL_Init();
   
   /* USER CODE BEGIN Init */
-  
+
   /* USER CODE END Init */
   
   /* Configure the system clock */
@@ -121,14 +122,17 @@ int main(void)
   MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_ADC_Init();
-  MX_TIM6_Init();
+//  MX_TIM6_Init();
   MX_RTC_Init();
   /* USER CODE BEGIN 2 */
-  //低功耗模式下调试延时，如果不加很难再次刷程序
-  HAL_Delay(5000);
+  //先关闭电机位置检测引脚中断,确保注册过程不被中断
+  motor_init();
+  motor_input_pin_off_interrupt(true);
   
   gUartDataPool = DataPoolInit(MAX_DMA_LEN);
-  motor_init();
+  
+  //低功耗模式下调试延时，如果不加很难再次刷程序
+  HAL_Delay(5000);
   
   LoraSetParamter( &gLoraPacket,
                   0x000f,
@@ -144,15 +148,15 @@ int main(void)
   //CloseNotUsedPeriphClock();
   //串口重初始化
   UART_ReInit(&huart1);
-  
+
   while(1) {
   
     if(LoraRegister())
       break;
 
-    rtc_set_timer(7);
+    rtc_set_timer(8);
     
-    LowPowerInit(1);
+    LowPowerInit(1, 1);
     HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
     //时钟配置清空
     HAL_RCC_DeInit();
@@ -165,11 +169,22 @@ int main(void)
     MX_DMA_Init();
     //串口重新配置
     UART_ReInit(&huart1);
-//    HAL_Delay(1000);
+//    printf("in main...up\r\n");
+//    motor_input_pin_off_interrupt(true);
+//    HAL_Delay(5000);
+//    
+//    printf("in main...down\r\n");
+//    motor_input_pin_off_interrupt(false);
+//    HAL_Delay(5000);
+    
   }
+  //重新配置外部中断引脚
+  motor_input_pin_off_interrupt(false);
+  HAL_Delay(20);
   /* USER CODE END 2 */
   
-  /* Infinite loop */
+  /* Infinit
+  e loop */
   /* USER CODE BEGIN WHILE */
   
   while (1)
@@ -179,7 +194,8 @@ int main(void)
     /* USER CODE BEGIN 3 */
     //理想情况是，有数据的时侯aux会输出低电压
     //延迟2-3ms后数据??串口发送给mcu
-    LowPowerInit(mode);
+    LowPowerInit(mode, flag);
+    gDevice.u8InteFlag = 0;
     HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
     //while(gLoraPacket.isIdle);
     
@@ -212,6 +228,10 @@ int main(void)
     } else {
       mode = ProcessTheData();
     }
+    
+    //中断处理
+    flag = motor_abnormal();
+    
   }
   /* USER CODE END 3 */
   

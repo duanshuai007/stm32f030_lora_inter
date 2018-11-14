@@ -27,25 +27,28 @@ enum {
 #define SERVER_REC_RESP_LEN     13
 
 //必须根据地锁版本来进行配置
-#define MODE_NEW
+#define MODE_OLD
 
 //重要，设置目标的id，必须配置为目标lora模块的地址
-#define TARGET_ID       22
+#define TARGET_ID      25
 
 #pragma pack(1)
 typedef struct {
-//    uint16_t u16LocalID;     //本机ID
-//    uint8_t u8CHAN;         //通信信道
     uint8_t u8Cmd;
     uint8_t u8ReCmd;       //接收到的重复指令
     
     uint8_t u8CmdRunning;   //当前有指令在运行
-    uint8_t u8Resp;
-    uint8_t u8CmdDone;      //异步指令执行完成标志位
+    volatile uint8_t u8Resp;
+    volatile uint8_t u8CmdDone;      //异步指令执行完成标志位
     uint8_t u8ReCmdFlag;        //指令执行过程中接到新指令标志位
+    
+    volatile uint8_t u8InteFlag;   //中断标志
+    volatile uint8_t u8InterDone;
     
     uint32_t u32Identify;
     uint32_t u32ReIdentify;
+    
+    
 } Device;
 #pragma pack()
 

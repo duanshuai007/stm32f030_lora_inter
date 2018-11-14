@@ -21,33 +21,39 @@ typedef void (* timer_gpio_xd_callback)(void);
 typedef void (* timer_ctrl_timeout_callback)(void);
 typedef struct {                  
     bool        enable;
-    uint8_t    max_count;       //æœ€å¤§å®šæ—¶æ—¶é•¿ä¸º 100Ã—255 = 25.5S
+    uint8_t    max_count;       //×î´ó¶¨Ê±Ê±³¤Îª 100¡Á255 = 25.5S
     uint8_t    cur_count;
 } motor_timer;
 
 typedef struct {
-    MOTOR_STATUS status;     //ç”µæœºå½“å‰çŠ¶æ€ 1=å§å€’,2=å‰å€¾,3=ç›´ç«‹,4=åå€¾
-    MOTOR_CMD action;     //å‘½ä»¤
+    volatile MOTOR_STATUS status;     //µç»úµ±Ç°×´Ì¬ 1=ÎÔµ¹,2=Ç°Çã,3=Ö±Á¢,4=ºóÇã
+    volatile MOTOR_CMD action;     //ÃüÁî
 
-    MOTOR_STATUS last_status;    //ä¿å­˜ä¸Šä¸€æ¬¡çš„æ­£å¸¸ä½ç½®çŠ¶æ€
-    MOTOR_STATUS can_stop; //å¼€å§‹è¿åŠ¨æ—¶çš„ä½ç½®çŠ¶æ€ï¼Œç”¨æ¥å¯¹ç”µæœºä¸Šå‡æ—¶è¿›è¡Œåœæ­¢åˆ¤æ–­ã€‚
+    volatile MOTOR_STATUS last_status;    //±£´æÉÏÒ»´ÎµÄÕı³£Î»ÖÃ×´Ì¬
+    MOTOR_STATUS can_stop; //¿ªÊ¼ÔË¶¯Ê±µÄÎ»ÖÃ×´Ì¬£¬ÓÃÀ´¶Ôµç»úÉÏÉıÊ±½øĞĞÍ£Ö¹ÅĞ¶Ï¡£
 
     motor_ctrl_callback         ctrl_cb;
     motor_check_callback        check_cb;
     motor_gpio_callback         gpio_cb;
     //htim6
     motor_timer                 xiaodou_timer;
-    timer_gpio_xd_callback      xiaodou_timer_cb;
+//    timer_gpio_xd_callback      xiaodou_timer_cb;
     //rtc alarm
     timer_ctrl_timeout_callback ctrl_timer_cb;
 } Motor;
 
-//ç³»ç»Ÿæ¥å£
-//ç”µæœºæ§åˆ¶å‡½æ•°
+//ÏµÍ³½Ó¿Ú
+//µç»ú¿ØÖÆº¯Êı
 MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd);
-//è·å–ç”µæœºä½ç½®çŠ¶æ€çš„å‡½æ•°
+//»ñÈ¡µç»úÎ»ÖÃ×´Ì¬µÄº¯Êı
 MOTOR_STATUS motor_get_status(void);
 
 void motor_init(void);
+
+//µç»úÎ»ÖÃ¼ì²âÒı½ÅÖĞ¶Ï¿ªÆôºÍ¹Ø±Õ
+void motor_input_pin_off_interrupt(bool b);
+
+//µç»úÒì³£¶¯×÷´¦Àí
+uint8_t motor_abnormal(void);
 
 #endif

@@ -16,8 +16,8 @@ void rtc_disable(void)
 */
 void rtc_set_timer(uint8_t time)
 { 
-    if ( time > 7 ) 
-      time = 7;
+    if ( time > 8 ) 
+      time = 8;
     
     RTC_TimeTypeDef sTime;
     RTC_DateTypeDef sDate;
@@ -68,7 +68,7 @@ void rtc_set_timer(uint8_t time)
     */
     sAlarm.AlarmTime.Hours = 0x0;
     sAlarm.AlarmTime.Minutes = 0x0;
-    sAlarm.AlarmTime.Seconds = (time + 1);
+    sAlarm.AlarmTime.Seconds = time;
     sAlarm.AlarmTime.SubSeconds = 0x0;
     sAlarm.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
     sAlarm.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
