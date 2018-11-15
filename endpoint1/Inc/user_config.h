@@ -6,17 +6,16 @@
 #include "stm32f0xx_hal_def.h"
 #include "lora_paramter.h"
 
-
 #define DEBUG
 
 typedef enum {
-    false,
-    true,
+  false,
+  true,
 }bool;
 
 enum {
-    CMD_STOP,
-    CMD_RUN,
+  CMD_STOP,
+  CMD_RUN,
 };
 
 #define LORA_MSG_HEAD 0xA5
@@ -34,21 +33,19 @@ enum {
 
 #pragma pack(1)
 typedef struct {
-    uint8_t u8Cmd;
-    uint8_t u8ReCmd;       //接收到的重复指令
-    
-    uint8_t u8CmdRunning;   //当前有指令在运行
-    volatile uint8_t u8Resp;
-    volatile uint8_t u8CmdDone;      //异步指令执行完成标志位
-    uint8_t u8ReCmdFlag;        //指令执行过程中接到新指令标志位
-    
-    volatile uint8_t u8InteFlag;   //中断标志
-    volatile uint8_t u8InterDone;
-    
-    uint32_t u32Identify;
-    uint32_t u32ReIdentify;
-    
-    
+  uint8_t u8Cmd;
+  uint8_t u8ReCmd;       //接收到的重复指令
+  
+  uint8_t u8CmdRunning;   //当前有指令在运行
+  volatile uint8_t u8Resp;
+  volatile uint8_t u8CmdDone;      //异步指令执行完成标志位
+  uint8_t u8ReCmdFlag;        //指令执行过程中接到新指令标志位
+  
+  volatile uint8_t u8InteFlag;   //中断标志
+  volatile uint8_t u8InterDone;
+  
+  uint32_t u32Identify;
+  uint32_t u32ReIdentify;
 } Device;
 #pragma pack()
 

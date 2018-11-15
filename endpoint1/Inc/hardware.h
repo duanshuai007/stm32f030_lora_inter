@@ -33,10 +33,11 @@ typedef enum {
   //          0   蜂鸣器处于关闭状态
   HW_ADC_GET        = 7,
   //返回值    电池电压转换后的代表电量的数值(0-100)
-  HW_MOTOR_ABNORMAL = 8,
-  HW_DEVICE_ONLINE  = 9,
-  HW_DEVICE_HEART = 10,
 } HW_CMD;
+
+#define HW_DEVICE_ONLINE    100
+#define HW_DEVICE_HEART     101
+#define HW_MOTOR_ABNORMAL   102
 
 typedef enum {
   MOTOR_OK        = 0,      

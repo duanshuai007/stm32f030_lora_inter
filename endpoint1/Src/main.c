@@ -77,7 +77,6 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_ADC_Init(void);
-static void MX_TIM6_Init(void);
 static void MX_RTC_Init(void);
 
 /* USER CODE BEGIN PFP */
@@ -122,7 +121,6 @@ int main(void)
   MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_ADC_Init();
-//  MX_TIM6_Init();
   MX_RTC_Init();
   /* USER CODE BEGIN 2 */
   //先关闭电机位置检测引脚中断,确保注册过程不被中断
@@ -416,22 +414,6 @@ static void MX_RTC_Init(void)
   /* USER CODE BEGIN RTC_Init 5 */
   
   /* USER CODE END RTC_Init 5 */
-  
-}
-
-/* TIM6 init function */
-static void MX_TIM6_Init(void)
-{
-  
-  htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 2000;
-  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 100;
-  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
   
 }
 

@@ -317,7 +317,9 @@ uint8_t motor_abnormal(void)
     motor_input_pin_off_interrupt(false);
     //do resp
     
-    if ( motor.status != motor.last_status ) {
+    MOTOR_STATUS last = motor.last_status;
+    
+    if ( motor.status != last ) {
       LoraSendAbnormalMSG();
       motor.last_status = motor.status;
     }
