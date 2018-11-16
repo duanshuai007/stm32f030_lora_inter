@@ -10,6 +10,10 @@
     <encoding>GB2312</encoding>
   </override>
   <override>
+    <path>C:\Users\Administrator\Personal\lora\server\Inc\lora_paramter.h</path>
+    <encoding>GB2312</encoding>
+  </override>
+  <override>
     <path>C:\Users\Administrator\Personal\lora\server\Inc\maincontrol.h</path>
     <encoding>System</encoding>
   </override>

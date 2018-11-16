@@ -198,7 +198,15 @@ void ListProcess(List *list)
       case CMD_STATUS_RUN: {
         //等待判断指令超时
         uint32_t nowTime = GetRTCTime();
-        if ( nowTime - ln->Device->u32Time >= CMD_RETRY_TIMEINTERVAL ) {
+        uint32_t timeout;
+        if ( ln->Device->u8CMD != DEVICE_HEART ) {
+          timeout = CMD_TIMEOUT;
+        } else {
+          timeout = CMD_RETRY_TIMEINTERVAL;
+        }
+        //如果是心跳指令，则超时CMD_RETRY_TIMEINTERVAL后重试CMD_MAX_RETRY_TIMES次
+        //若没有接收到响应包，则认为掉线
+        if ( nowTime - ln->Device->u32Time >= timeout ) {
           //设置命令重新执行
           ln->Device->u8CMDSTATUS = CMD_STATUS_STANDBY;
           //10秒内没有响应，设置为掉线

@@ -34,9 +34,13 @@ typedef enum {
 #define CMD_STATUS_STANDBY    104   //有新指令，等待运行
 
 //设置系统心跳的最大空闲时间，当对应设备空闲HEART_TIMESTAMP 秒后，发送一个心跳包
-#define HEART_TIMESTAMP         20
-#define CMD_MAX_RETRY_TIMES     8
-#define CMD_RETRY_TIMEINTERVAL  5   
+#define HEART_TIMESTAMP         60
+//如果没有响应，重试次数
+#define CMD_MAX_RETRY_TIMES     5
+//重试每次之间的间隔
+#define CMD_RETRY_TIMEINTERVAL  5 
+//CMD没有响应CMD_TIMEOUT秒后就认为超时
+#define CMD_TIMEOUT             5
 
 //每隔60秒保存一次设备信息到flash内
 #define FLASH_SAVE_TIMEINTERVAL   60

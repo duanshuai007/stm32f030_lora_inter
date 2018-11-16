@@ -12,6 +12,7 @@
 #include "lora_datapool.h"
 #include "flash.h"
 #include "rtc.h"
+#include "maincontrol.h"
 
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart3;
@@ -650,6 +651,7 @@ void LoraDataPoolProcess(LoraModule *lp)
             case DEVICE_REGISTER:
               //register device
               add_device_to_list(gList, resp->u16Id);
+              UartSendOnLineToF405(&gUartMx, resp->u16Id);
               //give endpoint resp msg
               LoraCtrlEndPoint(&gLoraMS, resp->u16Id, DEFAULT_CHANNEL, DEVICE_REGISTER, 0);
               //save endpoint into flash
