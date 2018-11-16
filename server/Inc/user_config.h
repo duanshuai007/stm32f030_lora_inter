@@ -20,31 +20,46 @@ typedef enum {
 #define LORA_MSG_TAIL 0x5A
 #define POOL_CLEAN    0x00
 
-  //电机运行状态信息
+
+//LoraModule Send MSG min timeinterval
+#define LORA_SEND_MIN_TIMEINTERVAL  50
+//电机运行状态信息，当发送CMD是电机动作时，resp等于该值
 #define MOTOR_RUNING          99   //地锁电机开始运行了
+
+//设备的指令执行状态，用于server本身cmd状态的跟踪
 #define CMD_STATUS_IDLE       100   //空闲状态
 #define CMD_STATUS_RUN        101   //正在运行
 #define CMD_STATUS_DONE       102   //运行完成
 #define CMD_STATUS_STOP       103   //超时停止运行
-#define CMD_STATUS_TIMEOUT    104   //超出响应时间没有应答
-#define CMD_STATUS_HEART      105   //接收到设备的心跳响应
-#define CMD_STATUS_STANDBY    106   //有新指令，等待运行
-//modify by liyongsheng begin
+#define CMD_STATUS_STANDBY    104   //有新指令，等待运行
 
+//设置系统心跳的最大空闲时间，当对应设备空闲HEART_TIMESTAMP 秒后，发送一个心跳包
+#define HEART_TIMESTAMP         20
+#define CMD_MAX_RETRY_TIMES     8
+#define CMD_RETRY_TIMEINTERVAL  5   
+
+//每隔60秒保存一次设备信息到flash内
+#define FLASH_SAVE_TIMEINTERVAL   60
+
+//modify by liyongsheng begin
+//设备所能识别的cmd
 typedef enum 
 {
-  CMD_MOTOR_UP = 1,
-  CMD_MOTOR_DOWN = 2,
-  CMD_MOTOR_STATUS_GET = 3,
-  CMD_BEEP_ON = 4,
-  CMD_BEEP_OFF = 5,
-  CMD_BEEP_STATUS_GET = 6,
-  CMD_ADC_GET = 7,  
-  CMD_MOTOR_ABNORMAL = 8,
-  CMD_DEVICE_REGISTER = 9,
-  CMD_DEVICE_HEART = 10,
-
+  CMD_NONE              = 0,
+  CMD_MOTOR_UP          = 1,
+  CMD_MOTOR_DOWN        = 2,
+  CMD_MOTOR_STATUS_GET  = 3,
+  CMD_BEEP_ON           = 4,
+  CMD_BEEP_OFF          = 5,
+  CMD_BEEP_STATUS_GET   = 6,
+  CMD_ADC_GET           = 7,
+  CMD_GET_ALL_NODE      = 8,
 }CMD_TYPE;
+
+//server内部与endpoint之间的通信命令，与405 cmd共占用资源
+#define DEVICE_REGISTER     100
+#define DEVICE_HEART        101
+#define DEVICE_ABNORMAL     102
 
 typedef enum
 {
@@ -87,12 +102,13 @@ typedef enum
 #define UART1_RX_DATAPOOL_SIZE  128
 //lora send module
 #define UART3_TX_DMA_LEN        (SERVER_CMD_LEN + SERVER_CMD_HEAD_SIZE) //15
+#define UART3_TX_DATAPOOL_SIZE  128
 
 //f405
-#define F405_SEND_CMD_LEN       10
-#define F405_RECV_CMD_LEN       10
+#define F405_SEND_CMD_LEN       6
 //uart2 send buffer size
 #define UART2_TX_DMA_LEN        (F405_SEND_CMD_LEN)
+#define UART2_TX_DATAPOOL_SIZE  128
 //uart2 receive buffer size
 #define UART2_RX_DMA_LEN        64
 #define UART2_RX_DATAPOOL_SIZE  128

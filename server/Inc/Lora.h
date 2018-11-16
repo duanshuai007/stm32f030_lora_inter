@@ -83,13 +83,14 @@ typedef struct {
   DMA_HandleTypeDef   *uart_tx_hdma;
   DMA_HandleTypeDef   *uart_rx_hdma;
 
-  uint16_t    dma_rbuff_size;  //dma接收缓冲区的大小
-  uint16_t    dma_sbuff_size;  //dma发送缓冲区的大小
+  uint16_t dma_rbuff_size;  //dma接收缓冲区的大小
+  uint16_t dma_sbuff_size;  //dma发送缓冲区的大小
   
   uint8_t *dma_rbuff;         //指向dma接收缓冲区
   uint8_t *dma_sbuff;         //指向dma发送缓冲区
   
-  DataPool *dataPool;
+  DataPool *txDataPool;
+  DataPool *rxDataPool;
   
 } UartModule;
 
@@ -150,7 +151,7 @@ bool LoraCtrlEndPoint(LoraModule *lm, uint16_t id, uint8_t channel, uint8_t cmd,
 //move data from dma to pool
 void CopyDataFromDMA(UART_HandleTypeDef *huart);
 //
-void LoraPoolDataProcess(LoraModule *lp);
+void LoraDataPoolProcess(LoraModule *lp);
 
 #endif
 

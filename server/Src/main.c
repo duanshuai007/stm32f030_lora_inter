@@ -52,6 +52,8 @@
 /* Private variables ---------------------------------------------------------*/
 RTC_HandleTypeDef hrtc;
 
+TIM_HandleTypeDef htim4;
+
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
@@ -62,13 +64,13 @@ DMA_HandleTypeDef hdma_usart3_tx;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-LoraModule      gLoraMS;
-LoraModule      gLoraMR;
+LoraModule      gLoraMS;      //lora发送结构体
+LoraModule      gLoraMR;      //lora接收结构体  
 Device          gDevice;
-UartModule      gUartMx;
-List            *gList;
-FLASHDeviceList *gFDList;
-
+UartModule      gUartMx;      //f405串口设备结构体
+List            *gList;       //设备链表，用于执行指令，查询心跳等操作
+FLASHDeviceList *gFDList;     //保存在flash中的设备链表
+volatile uint8_t lora_send_timer = 0;
 //LoraModule
 uint8_t dma_uart3_sbuff[UART3_TX_DMA_LEN];
 uint8_t dma_uart1_rbuff[UART1_RX_DMA_LEN];
@@ -85,6 +87,7 @@ static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_RTC_Init(void);
+static void MX_TIM4_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -129,21 +132,13 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
   MX_RTC_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   
   gList = list_init();
   
   //FLASH_CLEAN();
   gFDList = FLASH_Init(gList);
-//  LookList(gFDList);
-//  FlashAddDeviceToList(gFDList, 0x0001, 0x3358);
-//  FlashAddDeviceToList(gFDList, 0x0002, 0x3459);
-//  FlashAddDeviceToList(gFDList, 0x0003, 0x2554);
-//  FlashAddDeviceToList(gFDList, 0x0004, 0x1653);
-//  FlashAddDeviceToList(gFDList, 0x0005, 0x4552);
-//  FlashAddDeviceToList(gFDList, 0x0006, 0x5451);
-//  FlashAddDeviceToList(gFDList, 0x0007, 0x6350);
-//  FlashWriteDevie(gFDList);
   LookList(gFDList);
   
   UARTF405_Init(&gUartMx, &huart2);
@@ -163,7 +158,7 @@ int main(void)
   
   //set receive struct
   LoraSetParamter( &gLoraMR,
-                    22,
+                    25,
                     BAUD_115200,
                     CHAN_440MHZ,
                     PARITY_8O1,
@@ -174,35 +169,13 @@ int main(void)
   
   LoraModuleDMAInit( &gLoraMS );
   LoraModuleDMAInit( &gLoraMR );
-  
-//  gDevice.u16TargetID = 0x0002;
-//
-//  printf("sizeof(Device) = %d\r\n", sizeof(Device));
-//  printf("sizeof(ListNode)= %d\r\n", sizeof(List));
-//  printf("sizeof(DataPool) = %d\r\n", sizeof(DataPool));
-  
-//  gList = list_init();
-  //  testCmdList(gLoraCmdList);
-  
-//  add_device_to_list(gList, 0x000f);
-//  add_device_to_list(gList, 0x0001);
-//  add_device_to_list(gList, 0x0002);
-//  add_device_to_list(gList, 0x0003);
-//  add_device_to_list(gList, 0x0004);
-//  add_device_to_list(gList, 0x000f);
-//  add_device_to_list(gList, 0x0005);
-//  add_device_to_list(gList, 0x0004);
-//  LookAllList(gList);
-  
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
-//    uint32_t time = 0;
-    uint32_t last = GetRTCTime();
-//    uint8_t i = 3;
-  printf("start while\r\n");
+  PRINT("start while\r\n");
+  HAL_TIM_Base_Start_IT(&htim4);
+  
   while (1)
   {
 
@@ -210,21 +183,10 @@ int main(void)
 
   /* USER CODE BEGIN 3 */
 
-      LoraPoolDataProcess(&gLoraMR);
+      LoraDataPoolProcess(&gLoraMR);    //解析从lora接收到的数据
       F405CmdProcess(&gUartMx);
       ListProcess(gList);
       DeviceOnlineStatusProcess(gFDList);
-      
-//      time = GetRTCTime();
-//      if ( time - last > 5 ) {
-//        last = time;
-//        i++;  
-//        if ( i > 7 ) { 
-//          i = 3;
-//        }
-////        LookAllList(gLoraCmdList);
-//        set_device_of_list_cmd(gList, 0x000f, i, 0x12345670 + i);
-//      }
   }
   /* USER CODE END 3 */
 
@@ -330,6 +292,39 @@ static void MX_RTC_Init(void)
   DateToUpdate.Year = 0x0;
 
   if (HAL_RTC_SetDate(&hrtc, &DateToUpdate, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+}
+
+/* TIM4 init function */
+static void MX_TIM4_Init(void)
+{
+
+  TIM_ClockConfigTypeDef sClockSourceConfig;
+  TIM_MasterConfigTypeDef sMasterConfig;
+
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = 48000;
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = 10;
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }

@@ -38,6 +38,7 @@
 /* USER CODE BEGIN 0 */
 #include "Lora.h"
 #include "maincontrol.h"
+#include "user_config.h"
       
 extern LoraModule gLoraMS;
 extern LoraModule gLoraMR;
@@ -46,6 +47,7 @@ extern UartModule gUartMx;
 
 /* External variables --------------------------------------------------------*/
 extern RTC_HandleTypeDef hrtc;
+extern TIM_HandleTypeDef htim4;
 extern DMA_HandleTypeDef hdma_usart1_rx;
 extern DMA_HandleTypeDef hdma_usart2_rx;
 extern DMA_HandleTypeDef hdma_usart2_tx;
@@ -303,6 +305,20 @@ void DMA1_Channel7_IRQHandler(void)
 }
 
 /**
+* @brief This function handles TIM4 global interrupt.
+*/
+void TIM4_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM4_IRQn 0 */
+
+  /* USER CODE END TIM4_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim4);
+  /* USER CODE BEGIN TIM4_IRQn 1 */
+
+  /* USER CODE END TIM4_IRQn 1 */
+}
+
+/**
 * @brief This function handles USART1 global interrupt.
 */
 void USART1_IRQHandler(void)
@@ -420,6 +436,19 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
                              gUartMx.dma_rbuff,
                              gUartMx.dma_rbuff_size);
     }
+}
+
+extern volatile uint8_t lora_send_timer;
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if (lora_send_timer > 0)
+  {
+    lora_send_timer++;
+    if ( lora_send_timer >= LORA_SEND_MIN_TIMEINTERVAL ) {
+      lora_send_timer = 0;
+    }
+  }
 }
 
 void HAL_FLASH_EndOfOperationCallback(uint32_t ReturnValue)

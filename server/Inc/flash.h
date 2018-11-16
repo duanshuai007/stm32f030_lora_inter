@@ -21,7 +21,7 @@ typedef struct SaveMSG{
   uint16_t u16DeviceID;   //设备ID
   uint16_t u16LastTime;   //设备最后一次响应的时间
   struct SaveMSG *next;
-  uint32_t u32RegStatus;
+//  uint32_t u32RegStatus;
 } SaveMSG;
 
 typedef struct {
@@ -48,6 +48,9 @@ uint8_t FlashWriteDevie(FLASHDeviceList *list);
 *   设备重新启动后也需要重新注册
 */
 void DeviceOnlineStatusProcess(FLASHDeviceList *list);
+
+
+void FlashDelDeviceFromList(FLASHDeviceList *list, uint16_t id);
 
 /**
 *   设置flash内设备的注册状态

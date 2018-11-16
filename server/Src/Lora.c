@@ -27,6 +27,7 @@ extern FLASHDeviceList *gFDList;
 
 extern uint8_t dma_uart3_sbuff[UART3_TX_DMA_LEN];
 extern uint8_t dma_uart1_rbuff[UART1_RX_DMA_LEN];
+extern volatile uint8_t lora_send_timer;
 
 static uint8_t Lora_is_idle(LoraModule *lm)
 {
@@ -131,10 +132,12 @@ void LoraModuleDMAInit( LoraModule *lm)
     
     Lora_Module_Set_Mode( lm, LoraMode_Normal);
     
-    lm->muart.dataPool = DataPoolInit(UART1_RX_DATAPOOL_SIZE);
-    if ( lm->muart.dataPool == NULL ) {
-      PRINT("uart1 datapool NULL\r\n");
+    lm->muart.rxDataPool = DataPoolInit(UART1_RX_DATAPOOL_SIZE);
+    if ( lm->muart.rxDataPool == NULL ) {
+      PRINT("uart1 rxdatapool NULL\r\n");
     }
+    
+    lm->muart.txDataPool = NULL;
   }
   /*
   *   UART3 作为Lora发送串口
@@ -151,6 +154,12 @@ void LoraModuleDMAInit( LoraModule *lm)
     /* UART2作为主发送串口，除了在配置模式，其余时间均不接收数据 */
     
     Lora_Module_Set_Mode( lm, LoraMode_WakeUp);
+    
+    lm->muart.rxDataPool = NULL;
+    lm->muart.txDataPool = DataPoolInit(UART1_RX_DATAPOOL_SIZE);
+    if ( lm->muart.txDataPool == NULL ) {
+      PRINT("uart3 txdatapool NULL\r\n");
+    }
   }
 }
 
@@ -502,25 +511,47 @@ void LoraReadParamter(LoraModule *lm)
 */
 bool LoraCtrlEndPoint(LoraModule *lm, uint16_t id, uint8_t channel, uint8_t cmd, uint32_t identify)
 {
-#define LORA_MAX_IDLE_WAIT      200
+//#define LORA_MAX_IDLE_WAIT      200
+//  
+//  uint8_t delay = 0;
+//  
+//  while((!Lora_is_idle(lm)) && (delay < LORA_MAX_IDLE_WAIT))
+//  {
+//    delay++;
+//    HAL_Delay(1);
+//  }
+//  
+//  if (delay >= LORA_MAX_IDLE_WAIT) {
+//    return false;
+//  }
+//  
+//  lm->muart.dma_sbuff[0] = (uint8_t)((id & 0xff00) >> 8);        //目标地址
+//  lm->muart.dma_sbuff[1] = (uint8_t)(id & 0x00ff);
+//  lm->muart.dma_sbuff[2] = channel;                      //目标信道
+//  
+//  CmdDataPacket *ptr = (CmdDataPacket *)(lm->muart.dma_sbuff + 3);
+//  ptr->u8Head = LORA_MSG_HEAD;
+//  ptr->u8Len  = SERVER_CMD_LEN;
+//  ptr->u16Id  = id; //目标地址
+//  ptr->u8Cmd  = cmd;
+//  ptr->u32Identify = identify;
+//  ptr->u16Crc = CRC16_IBM((uint8_t *)ptr, SERVER_CMD_LEN - 3);
+//  ptr->u8Tail = LORA_MSG_TAIL;
+//  
+//  if ( HAL_OK == HAL_UART_Transmit_DMA(lm->muart.uart, lm->muart.dma_sbuff, ptr->u8Len + 3)) {
+//    //发送成功，设置设备状态标志为run
+//    HAL_Delay(20);
+//    while(!Lora_is_idle(lm));
+//    return true;
+//  }
   
-  uint8_t delay = 0;
+  uint8_t buffer[16];
   
-  while((!Lora_is_idle(lm)) && (delay < LORA_MAX_IDLE_WAIT))
-  {
-    delay++;
-    HAL_Delay(1);
-  }
+  buffer[0] = (uint8_t)((id & 0xff00) >> 8);
+  buffer[1] = (uint8_t)(id & 0x00ff);
+  buffer[2] = channel;
   
-  if (delay >= LORA_MAX_IDLE_WAIT) {
-    return false;
-  }
-  
-  lm->muart.dma_sbuff[0] = (uint8_t)((id & 0xff00) >> 8);        //目标地址
-  lm->muart.dma_sbuff[1] = (uint8_t)(id & 0x00ff);
-  lm->muart.dma_sbuff[2] = channel;                      //目标信道
-  
-  CmdDataPacket *ptr = (CmdDataPacket *)(lm->muart.dma_sbuff + 3);
+  CmdDataPacket *ptr = (CmdDataPacket *)&buffer[3];
   ptr->u8Head = LORA_MSG_HEAD;
   ptr->u8Len  = SERVER_CMD_LEN;
   ptr->u16Id  = id; //目标地址
@@ -529,13 +560,10 @@ bool LoraCtrlEndPoint(LoraModule *lm, uint16_t id, uint8_t channel, uint8_t cmd,
   ptr->u16Crc = CRC16_IBM((uint8_t *)ptr, SERVER_CMD_LEN - 3);
   ptr->u8Tail = LORA_MSG_TAIL;
   
-//  printf("******Send cmd to endpoint\r\n");
-  if ( HAL_OK == HAL_UART_Transmit_DMA(lm->muart.uart, lm->muart.dma_sbuff, ptr->u8Len + 3)) {
-    //发送成功，设置设备状态标志为run
-    return true;
-  }
+  DataPoolWrite(lm->muart.txDataPool, buffer, sizeof(CmdDataPacket) + 3);
   
-  return false;
+
+  return true;
 }
 
 static UartModule *GetUartModule(UART_HandleTypeDef *huart)
@@ -551,10 +579,10 @@ static UartModule *GetUartModule(UART_HandleTypeDef *huart)
 }
 
 //从dma中取出数据来放入
+//uart2 和uart1 都会调用该函数进行数据移动
 void CopyDataFromDMA(UART_HandleTypeDef *huart)
 {
   uint16_t len;
-  //    LoraModule *lm = &gLoraMR;
   UartModule *um = GetUartModule(huart);
   
   //len 等于已经用于存放数据的长度(空间)
@@ -572,11 +600,10 @@ void CopyDataFromDMA(UART_HandleTypeDef *huart)
     return;
   
   if (( 0 == len ) && ( um->pos > 0)) {
-    //        printf("pool rec int 1\r\n");
     //数据接收完成中断，将数据写入pool中后，将pos重置。
     uint16_t pos = um->pos;
 
-    len = DataPoolWrite(um->dataPool, 
+    len = DataPoolWrite(um->rxDataPool, 
                         um->dma_rbuff + pos, 
                         um->dma_rbuff_size - pos );
     um->pos = 0;
@@ -584,25 +611,25 @@ void CopyDataFromDMA(UART_HandleTypeDef *huart)
   } else  if (len > um->pos) {
     //空闲中断，取出当前接收的数据，然后重新设置pos值
     uint16_t pos = um->pos;
-    len = DataPoolWrite(um->dataPool, 
+    len = DataPoolWrite(um->rxDataPool, 
                         um->dma_rbuff + pos, 
                         len - pos);
     um->pos += len;
     
     if( um->pos == um->dma_rbuff_size ) 
       um->pos = 0;
-    
   }
 }
 
-void LoraPoolDataProcess(LoraModule *lp)
+//uart1 的接收数据处理方法
+void LoraDataPoolProcess(LoraModule *lp)
 {
   static uint8_t retry = 0;
-  static uint8_t time = 0;
+  uint8_t time = 0;
   uint8_t dat;
   uint8_t ret;
   
-  DataPool * dp = lp->muart.dataPool;
+  DataPool * dp = lp->muart.rxDataPool;
   
   while(1) {
     dat = 0;
@@ -619,19 +646,24 @@ void LoraPoolDataProcess(LoraModule *lp)
             retry = 0;
             //PRINT("Process: cmd = %d, id=%04x, resp=%d\r\n", resp->u8Cmd, resp->u16Id, resp->u8Resp);
             //将接收到的设备信息写入链表中
-            if ( CMD_DEVICE_REGISTER == resp->u8Cmd ) {
+            switch ( resp->u8Cmd ) {
+            case DEVICE_REGISTER:
               //register device
               add_device_to_list(gList, resp->u16Id);
               //give endpoint resp msg
-              LoraCtrlEndPoint(&gLoraMS, resp->u16Id, DEFAULT_CHANNEL, CMD_DEVICE_REGISTER, 0);
-              printf("Device online\r\n");
+              LoraCtrlEndPoint(&gLoraMS, resp->u16Id, DEFAULT_CHANNEL, DEVICE_REGISTER, 0);
               //save endpoint into flash
-            } else {
-              printf("EndP:cmd:%d,resp:%d\r\n", resp->u8Cmd, resp->u8Resp);
+              break;
+            case DEVICE_ABNORMAL:
+              //设置当前设备cmd为异常动作cmd，然后走正常的流程
+              SendCMDRespToList(gList, resp->u16Id, resp->u8Cmd, 0, resp->u8Resp);
+              break;
+            default:
+              //printf("EndP:cmd:%d,resp:%d\r\n", resp->u8Cmd, resp->u8Resp);
               SendCMDRespToList(gList, resp->u16Id, resp->u8Cmd, resp->u32Identify, resp->u8Resp);
               //save endpoint into flash
+              break;
             }
-            
             //保存到flash链表内的节点会向f405发送上线信息，收到f405的响应后会设置上线状态为成功
             FlashAddDeviceToList(gFDList, resp->u16Id, GetRTCTimeMinAndSec());
           }
@@ -640,7 +672,7 @@ void LoraPoolDataProcess(LoraModule *lp)
           //读取到错误的数据包，恢复pool，
           DataPoolResume(dp, SERVER_RESP_LEN);
           //跳过当前字节寻找下一个head
-          ret = DataPoolGetByte(dp, &dat);
+          DataPoolGetByte(dp, &dat);
         }
       } /*end if ( len == SERVER_REC_RESP_LEN )*/
       else {
@@ -650,7 +682,7 @@ void LoraPoolDataProcess(LoraModule *lp)
         //HAL_Delay(1);
         if (retry > 100) {
           retry = 0;
-          ret = DataPoolGetByte(dp, &dat);
+          DataPoolGetByte(dp, &dat);
         }
         //使用break跳出循环来替代延时，
         //要求其他程序中必须能够占用一定的时间，
@@ -665,11 +697,27 @@ void LoraPoolDataProcess(LoraModule *lp)
         break;
       }
     }
-    
+
+    //该段代码用来保证该循环不会一直占用cpu
     time++;
-    if ( 200 == time ) {
+    if ( 50 == time ) {
       time = 0;
       break;
+    }
+  }
+  
+  UartModule *um = &gLoraMS.muart;
+  
+  if ( lora_send_timer == 0 ) {
+    if (Lora_is_idle(lp)) {
+      if ( DataPoolGetNumByte(um->txDataPool, um->dma_sbuff, um->dma_sbuff_size)) {
+        //如果池中有6个字节，则复制到
+//        printf("lora send message\r\n");
+        HAL_UART_Transmit_DMA(um->uart, um->dma_sbuff, um->dma_sbuff_size);
+        lora_send_timer = 1;
+      } else {
+        lora_send_timer = 0;
+      }
     }
   }
 }

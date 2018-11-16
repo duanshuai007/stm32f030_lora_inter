@@ -14,7 +14,7 @@ Watch0=_ 0 "" 0 "" 0 "" 0 "" 0 0 0 0
 Watch1=_ 0 "" 0 "" 0 "" 0 "" 0 0 0 0
 CStepIntDis=_ 0
 [DebugChecksum]
-Checksum=-313847223
+Checksum=-1573485160
 [Exceptions]
 StopOnUncaught=_ 0
 StopOnThrow=_ 0
@@ -65,31 +65,31 @@ Fmt19=RespDataPacket-u8Len	4	0
 Fmt20=RespDataPacket-u8Resp	4	0
 Fmt21=RespDataPacket-u8Tail	4	0
 Fmt22=UartModule-dma_rbuff	4	0
-Fmt23=UartModule-dma_rbuff_max_num	3	0
-Fmt24=UartModule-dma_rbuff_no	3	0
-Fmt25=UartModule-dma_sbuff	4	0
-Fmt26=UartModule-dma_sbuff_size	3	0
-Fmt27=struct DeviceNode-u16ID	4	0
-Fmt28=struct DeviceNode-u32Identify	4	0
-Fmt29=struct DeviceNode-u8CHAN	3	0
-Fmt30=struct DeviceNode-u8CMD	3	0
-Fmt31=struct DeviceNode-u8CMDSTATUS	3	0
-Fmt32=struct DeviceNode-u8RESP	4	0
-Fmt33=struct SaveMSG-u16DeviceID	4	0
+Fmt23=UartModule-dma_sbuff	4	0
+Fmt24=UartModule-dma_sbuff_size	3	0
+Fmt25=struct DeviceNode-u16ID	4	0
+Fmt26=struct DeviceNode-u32Identify	4	0
+Fmt27=struct DeviceNode-u8CHAN	3	0
+Fmt28=struct DeviceNode-u8CMD	3	0
+Fmt29=struct DeviceNode-u8CMDSTATUS	3	0
+Fmt30=struct DeviceNode-u8RESP	4	0
+Fmt31=struct SaveMSG-u16DeviceID	4	0
 [array_types]
 Fmt0=uint8_t[1024]	4	0
 Fmt1=uint8_t[10]	4	0
 Fmt2=uint8_t[128]	4	0
-Fmt3=uint8_t[16]	4	0
-Fmt4=uint8_t[32]	4	0
-Fmt5=uint8_t[360]	4	0
-Fmt6=uint8_t[390]	4	0
-Fmt7=uint8_t[512]	4	0
-Fmt8=uint8_t[520]	4	0
-Fmt9=uint8_t[64]	4	0
-Fmt10=uint8_t[6]	4	0
+Fmt3=uint8_t[15]	4	0
+Fmt4=uint8_t[16]	4	0
+Fmt5=uint8_t[32]	4	0
+Fmt6=uint8_t[360]	4	0
+Fmt7=uint8_t[390]	4	0
+Fmt8=uint8_t[512]	4	0
+Fmt9=uint8_t[520]	4	0
+Fmt10=uint8_t[64]	4	0
+Fmt11=uint8_t[6]	4	0
 [watch_formats]
 Fmt0={W}1:cmd	0	2
+Fmt1={W}42:lora_send_timer	4	0
 [SWOTraceWindow]
 PcSampling=0
 InterruptLogs=0
@@ -132,6 +132,9 @@ SumSortOrder=0
 LoggingEnabled=_ 0
 LogFile=_ ""
 Category=_ 0
+[TermIOLog]
+LoggingEnabled=_ 0
+LogFile=_ ""
 [CallStackLog]
 Enabled=0
 [PowerProbe]
@@ -144,9 +147,6 @@ Mode=3
 Graph=0
 Symbiont=0
 Exclusions=
-[TermIOLog]
-LoggingEnabled=_ 0
-LogFile=_ ""
 [Disassemble mode]
 mode=0
 [Breakpoints2]

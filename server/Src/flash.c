@@ -33,7 +33,7 @@ FLASHDeviceList *FLASH_Init(List *list)
   fdl->Head->next = NULL;
   fdl->Head->u16DeviceID = 0xffff;
   fdl->Head->u16LastTime = 0;
-  fdl->Head->u32RegStatus = 0;
+//  fdl->Head->u32RegStatus = 0;
   fdl->u32Total = 0;
   
   uint32_t dat;
@@ -119,22 +119,37 @@ uint8_t FlashAddDeviceToList(FLASHDeviceList *list, uint16_t id, uint16_t time)
   fdl->u32Total++;
   sm->next->u16DeviceID = id;
   sm->next->u16LastTime = time;
-  sm->next->u32RegStatus = 0;
+//  sm->next->u32RegStatus = 0;
   sm->next->next = NULL;
   
   return 1;
 }
 
-void FlashSetDeviceOnline(FLASHDeviceList *list, uint16_t id)
+
+/*
+*
+*/
+void FlashDelDeviceFromList(FLASHDeviceList *list, uint16_t id)
 {
-  FLASHDeviceList *fdl = list;
-  SaveMSG *sm = fdl->Head->next;
+  SaveMSG *del = list->Head->next;
+  SaveMSG *pre = list->Head;
   
-  while ( sm ) {
-    if ( sm->u16DeviceID == id ) {
-      sm->u32RegStatus = 1;
+  while(del) {
+    if(del->u16DeviceID == id) {
+    
+      if(del->next) {
+        SaveMSG *next = del->next;
+        pre->next = next;
+      } else {
+        pre->next = NULL;
+      }
+      free(del);
+      
+      return;
     }
-    sm = sm->next;
+    
+    pre = del;
+    del = del->next;
   }
 }
 
@@ -214,22 +229,11 @@ uint8_t FlashWriteDevie(FLASHDeviceList *list)
 
 void DeviceOnlineStatusProcess(FLASHDeviceList *list)
 {
-  FLASHDeviceList *fdl = list;
-  SaveMSG *sm = fdl->Head->next;
-  static uint32_t time = 0;
   static uint32_t lasttime = 0;
-  
-  while ( sm ) {
-  
-    if ( sm->u32RegStatus == 0 ) {
-      //UartSendOnLineToF405(&gUartMx, sm->u16DeviceID);
-    }
-    
-    sm = sm->next;
-  }
+  uint32_t time = 0;
   //每隔60秒保存一次状态信息，写入到flash中
   time = GetRTCTime();
-  if ( time - lasttime > 60 ) {
+  if ( time - lasttime > FLASH_SAVE_TIMEINTERVAL ) {
     PRINT("FLASH:write device info to flash\r\n");
     lasttime = time;
     FlashWriteDevie(list);
@@ -248,14 +252,6 @@ void LookList(FLASHDeviceList *list)
     sm = sm->next;
   }
 }
-
-void printFlashTest(uint32_t addr)
-{
-  uint32_t temp = *(__IO uint32_t*)(addr);
-  
-  PRINT("addr:0x%x, data:0x%x\r\n", addr, temp);
-}
-
 
 void FLASH_CLEAN(void)
 {

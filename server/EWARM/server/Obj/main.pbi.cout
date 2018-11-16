@@ -1,30 +1,30 @@
-"Z:\下载\Lora\server\Src\main.c"
+"C:\Users\Administrator\Personal\lora\server\Src\main.c"
 -std=c99
 -ferror-limit=100
 -I
-Z:\下载\Lora\server\EWARM/../Inc
+C:\Users\Administrator\Personal\lora\server\EWARM/../Inc
 -I
-Z:\下载\Lora\server\EWARM/../Drivers/STM32F1xx_HAL_Driver/Inc
+C:\Users\Administrator\Personal\lora\server\EWARM/../Drivers/STM32F1xx_HAL_Driver/Inc
 -I
-Z:\下载\Lora\server\EWARM/../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy
+C:\Users\Administrator\Personal\lora\server\EWARM/../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy
 -I
-Z:\下载\Lora\server\EWARM/../Drivers/CMSIS/Device/ST/STM32F1xx/Include
+C:\Users\Administrator\Personal\lora\server\EWARM/../Drivers/CMSIS/Device/ST/STM32F1xx/Include
 -I
-Z:\下载\Lora\server\EWARM/../Drivers/CMSIS/Include
+C:\Users\Administrator\Personal\lora\server\EWARM/../Drivers/CMSIS/Include
 -I
 C:\Program Files (x86)\IAR Systems\Embedded Workbench 7.0\arm\inc
 -I
 C:\Program Files (x86)\IAR Systems\Embedded Workbench 7.0\arm\inc\c
 -I
-Z:\下载\Lora\server\Inc
+C:\Users\Administrator\Personal\lora\server\Inc
 -I
-Z:\下载\Lora\server\Drivers\STM32F1xx_HAL_Driver\Inc
+C:\Users\Administrator\Personal\lora\server\Drivers\STM32F1xx_HAL_Driver\Inc
 -I
-Z:\下载\Lora\server\Drivers\STM32F1xx_HAL_Driver\Inc\Legacy
+C:\Users\Administrator\Personal\lora\server\Drivers\STM32F1xx_HAL_Driver\Inc\Legacy
 -I
-Z:\下载\Lora\server\Drivers\CMSIS\Device\ST\STM32F1xx\Include
+C:\Users\Administrator\Personal\lora\server\Drivers\CMSIS\Device\ST\STM32F1xx\Include
 -I
-Z:\下载\Lora\server\Drivers\CMSIS\Include
+C:\Users\Administrator\Personal\lora\server\Drivers\CMSIS\Include
 -DUSE_HAL_DRIVER=1
 -DSTM32F103xB=1
 -D__CHAR_BITS__=8
@@ -217,8 +217,8 @@ Z:\下载\Lora\server\Drivers\CMSIS\Include
 -D__HAS_LOCATED_DECLARATION__=1
 -D__HAS_LOCATED_WITH_INIT__=1
 -D__IAR_COMPILERBASE__=593924
--D__DATE__="Nov  9 2018"
--D__TIME__="19:19:51"
+-D__DATE__="Nov 16 2018"
+-D__TIME__="15:54:24"
 -D__STDC__=1
 -D__STDC_VERSION__=199901L
 -D__STDC_HOSTED__=1

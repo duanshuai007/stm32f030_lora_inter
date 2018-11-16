@@ -132,15 +132,15 @@ int main(void)
   //低功耗模式下调试延时，如果不加很难再次刷程序
   HAL_Delay(5000);
   
-  LoraSetParamter( &gLoraPacket,
-                  0x000f,
-                  BAUD_57600,
-                  CHAN_440MHZ,
-                  PARITY_8O1,
-                  SPEED_IN_AIR_19_2K,
-                  TRANSFER_MODE_DINGDIAN,
-                  WAKEUP_TIME_500MS );
-  
+//  LoraSetParamter( &gLoraPacket,
+//                  0x0011,
+//                  BAUD_57600,
+//                  CHAN_440MHZ,
+//                  PARITY_8O1,
+//                  SPEED_IN_AIR_19_2K,
+//                  TRANSFER_MODE_DINGDIAN,
+//                  WAKEUP_TIME_500MS );
+//  
   LoraReadParamter( &gLoraPacket );
   
   //CloseNotUsedPeriphClock();
