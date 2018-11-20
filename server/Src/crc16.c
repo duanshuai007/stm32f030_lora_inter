@@ -68,7 +68,7 @@ uint16_t CRC16_IBM(uint8_t *puchMsg, uint8_t usDataLen)
   return wCRCin;
 }
 
-unsigned char crc8_chk_value(unsigned char *message, unsigned char len)
+uint8_t crc8_chk_value(uint8_t *message, uint8_t len)
 {
   uint8_t crc;
   uint8_t i;

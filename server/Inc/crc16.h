@@ -4,7 +4,7 @@
 #include "stdint.h"
 
 uint16_t CRC16_IBM(uint8_t *Msg, uint8_t Len);
-unsigned char crc8_chk_value(unsigned char *message, unsigned char len);
+uint8_t crc8_chk_value(uint8_t *message, uint8_t len);
 
 #endif
 

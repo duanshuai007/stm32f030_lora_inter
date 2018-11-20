@@ -39,10 +39,7 @@
 #include "Lora.h"
 #include "maincontrol.h"
 #include "user_config.h"
-      
-extern LoraModule gLoraMS;
-extern LoraModule gLoraMR;
-extern UartModule gUartMx;
+
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -330,8 +327,9 @@ void USART1_IRQHandler(void)
   /* USER CODE BEGIN USART1_IRQn 1 */
   if(__HAL_UART_GET_IT_SOURCE(&huart1,UART_IT_IDLE)!=RESET)
   {
+    if (CopyDataFromDMAHandler(&huart1) == true ) {
       __HAL_UART_CLEAR_IDLEFLAG(&huart1);
-      CopyDataFromDMA(&huart1);
+    }
   }
   /* USER CODE END USART1_IRQn 1 */
 }
@@ -348,8 +346,9 @@ void USART2_IRQHandler(void)
   /* USER CODE BEGIN USART2_IRQn 1 */
   if(__HAL_UART_GET_IT_SOURCE(&huart2,UART_IT_IDLE)!=RESET)
   {
+    if (CopyDataFromDMAHandler(&huart2) == true ) {
       __HAL_UART_CLEAR_IDLEFLAG(&huart2);
-      CopyDataFromDMA(&huart2);
+    }
   }
   /* USER CODE END USART2_IRQn 1 */
 }
@@ -387,74 +386,28 @@ void EXTI15_10_IRQHandler(void)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-    if ( gLoraMS.gpio.AUX.Pin == GPIO_Pin ) {
-        if ( HAL_GPIO_ReadPin(gLoraMS.gpio.AUX.GPIOX, gLoraMS.gpio.AUX.Pin) == GPIO_PIN_SET ) {
-            gLoraMS.isIdle = 1;
-        } else {
-            gLoraMS.isIdle = 0;
-        }
-    }
-    
-    if ( gLoraMR.gpio.AUX.Pin == GPIO_Pin) {
-        if ( HAL_GPIO_ReadPin(gLoraMR.gpio.AUX.GPIOX, gLoraMR.gpio.AUX.Pin) == GPIO_PIN_SET ) {
-            gLoraMR.isIdle = 1;
-        } else {
-            gLoraMR.isIdle = 0;
-        }
-    }
-}
-
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
-{
-    __HAL_UART_CLEAR_FLAG( huart, UART_FLAG_TC);
-    
-    if ( gLoraMS.muart.uart->Instance == huart->Instance ) {
-        //send message by LoraSendModule compelete
-        // uart3 should enter here , do something
-        
-        
-    } else if ( gLoraMR.muart.uart->Instance == huart->Instance ) {
-        //send message by LoraSendModule compelete
-        // should not enter here, because uart1 just receive,not send
-    } else if ( USART2 == huart->Instance ) {
-        //send message to F405 compelete
-    }
+  SetLoraModuleIdleFlagHandler(GPIO_Pin);
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if ( gLoraMR.muart.uart->Instance == huart->Instance ) {
-        //receive message from LoraReceiveModule
-      CopyDataFromDMA(gLoraMR.muart.uart);  
-      HAL_UART_Receive_DMA(gLoraMR.muart.uart, 
-                             gLoraMR.muart.dma_rbuff,
-                             gLoraMR.muart.dma_rbuff_size);
-    } else if ( gUartMx.uart->Instance == huart->Instance ) {
-        //receive message from F405 
-        CopyDataFromDMA(gUartMx.uart);
-        HAL_UART_Receive_DMA(gUartMx.uart, 
-                             gUartMx.dma_rbuff,
-                             gUartMx.dma_rbuff_size);
-    }
+  //receive message from LoraReceiveModule
+  LoraModuleReceiveHandler(huart);
+  //receive message from F405 
+  F405ReveiveHandler(huart);
 }
-
-extern volatile uint8_t lora_send_timer;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-  if (lora_send_timer > 0)
-  {
-    lora_send_timer++;
-    if ( lora_send_timer >= LORA_SEND_MIN_TIMEINTERVAL ) {
-      lora_send_timer = 0;
-    }
-  }
+  LoraSendTimerHandler();
 }
 
+#if 0
 void HAL_FLASH_EndOfOperationCallback(uint32_t ReturnValue)
 {
   
 }
+#endif
 
 //¥ÌŒÛ¥¶¿Ì
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)

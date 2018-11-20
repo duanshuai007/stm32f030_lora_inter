@@ -64,19 +64,7 @@ DMA_HandleTypeDef hdma_usart3_tx;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-LoraModule      gLoraMS;      //lora发送结构体
-LoraModule      gLoraMR;      //lora接收结构体  
-Device          gDevice;
-UartModule      gUartMx;      //f405串口设备结构体
-List            *gList;       //设备链表，用于执行指令，查询心跳等操作
-FLASHDeviceList *gFDList;     //保存在flash中的设备链表
-volatile uint8_t lora_send_timer = 0;
-//LoraModule
-uint8_t dma_uart3_sbuff[UART3_TX_DMA_LEN];
-uint8_t dma_uart1_rbuff[UART1_RX_DMA_LEN];
-//F405
-uint8_t uart2_dma_rbuff[UART2_RX_DMA_LEN];
-uint8_t uart2_dma_sbuff[UART2_TX_DMA_LEN];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -134,46 +122,52 @@ int main(void)
   MX_RTC_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
+  //设备链表初始化
+  ListInit();
+  //flash内保存的链表初始化
+  FLASH_Init();
+  //与f405通信串口初始化
+  UARTF405_Init(&huart2);
+  //lora模块gpio引脚设置
+  LoraModuleGPIOInit(&huart3);
+  LoraModuleGPIOInit(&huart1);
+  //lora模块参数配置
+  LoraPar lp;
+  lp.u16Addr = 1021;
+  lp.u8Baud = BAUD_115200;
+  lp.u8Channel = CHAN_430MHZ;
+  lp.u8FEC = FEC_ENABLE;
+  lp.u8IOMode = IOMODE_PP;
+  lp.u8Parity = PARITY_8O1;
+  lp.u8SendDB = SEND_20DB;
+  lp.u8Speedinair = SPEED_IN_AIR_19_2K;
+  lp.u8TranferMode = TRANSFER_MODE_DINGDIAN;
+  lp.u8WakeUpTime = WAKEUP_TIME_750MS;
+  SetLoraParamter( &huart3, &lp);
+  ReadLoraParamter( &huart3 );
   
-  gList = list_init();
+  lp.u16Addr = 25;
+  lp.u8Baud = BAUD_115200;
+  lp.u8Channel = CHAN_440MHZ;
+  lp.u8FEC = FEC_ENABLE;
+  lp.u8IOMode = IOMODE_PP;
+  lp.u8Parity = PARITY_8O1;
+  lp.u8SendDB = SEND_20DB;
+  lp.u8Speedinair = SPEED_IN_AIR_19_2K;
+  lp.u8TranferMode = TRANSFER_MODE_DINGDIAN;
+  lp.u8WakeUpTime = WAKEUP_TIME_500MS;
+  SetLoraParamter( &huart1, &lp);
+  ReadLoraParamter( &huart1 );
   
-  //FLASH_CLEAN();
-  gFDList = FLASH_Init(gList);
-  LookList(gFDList);
-  
-  UARTF405_Init(&gUartMx, &huart2);
-  
-  LoraModuleGPIOInit( &gLoraMS, &huart3);
-  LoraModuleGPIOInit( &gLoraMR, &huart1);
-  //set send struct
-  LoraSetParamter( &gLoraMS,
-                    1021,
-                    BAUD_115200,
-                    CHAN_430MHZ,
-                    PARITY_8O1,
-                    SPEED_IN_AIR_19_2K,
-                    TRANSFER_MODE_DINGDIAN,
-                    WAKEUP_TIME_750MS );
-  LoraReadParamter( &gLoraMS );
-  
-  //set receive struct
-  LoraSetParamter( &gLoraMR,
-                    25,
-                    BAUD_115200,
-                    CHAN_440MHZ,
-                    PARITY_8O1,
-                    SPEED_IN_AIR_19_2K,
-                    TRANSFER_MODE_DINGDIAN,
-                    WAKEUP_TIME_500MS );
-  LoraReadParamter( &gLoraMR );
-  
-  LoraModuleDMAInit( &gLoraMS );
-  LoraModuleDMAInit( &gLoraMR );
+  //lora模块的dma配置，并使能中断
+  LoraModuleDMAInit( &huart3 );
+  LoraModuleDMAInit( &huart1 );
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   PRINT("start while\r\n");
+  //使能定时器4
   HAL_TIM_Base_Start_IT(&htim4);
   
   while (1)
@@ -183,10 +177,10 @@ int main(void)
 
   /* USER CODE BEGIN 3 */
 
-      LoraDataPoolProcess(&gLoraMR);    //解析从lora接收到的数据
-      F405CmdProcess(&gUartMx);
-      ListProcess(gList);
-      DeviceOnlineStatusProcess(gFDList);
+      LoraModuleTask();
+      F405Task();
+      ListTask();
+      FlashTask();
   }
   /* USER CODE END 3 */
 

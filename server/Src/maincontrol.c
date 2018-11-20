@@ -17,44 +17,57 @@ extern UART_HandleTypeDef huart2;
 extern DMA_HandleTypeDef hdma_usart2_rx;
 extern DMA_HandleTypeDef hdma_usart2_tx;
 
-extern Device   gDevice;
-extern List     *gList;
-extern FLASHDeviceList *gFDList;
+static UartModule *gUartMx;      //f405串口设备结构体
+static uint8_t uart2_dma_rbuff[UART2_RX_DMA_LEN] = {0};
+static uint8_t uart2_dma_sbuff[UART2_TX_DMA_LEN] = {0};
 
-extern uint8_t uart2_dma_rbuff[UART2_RX_DMA_LEN];
-extern uint8_t uart2_dma_sbuff[UART2_TX_DMA_LEN];
-
-void UARTF405_Init(UartModule *um, UART_HandleTypeDef *uart)
+/*
+*   初始化与F405通信的串口相关结构体
+*/
+void UARTF405_Init(UART_HandleTypeDef *uart)
 {
-  um->pos = 0;
-  um->uart = uart;
+  gUartMx = (UartModule *)malloc(sizeof(UartModule));
+  if(gUartMx == NULL) {
+    PRINT("gUartMx == NULL\r\n");
+    return;
+  }
   
-  um->uart_rx_hdma = &hdma_usart2_rx;
-  um->uart_tx_hdma = &hdma_usart2_tx;
+  gUartMx->pos = 0;
+  gUartMx->uart = uart;
   
-  um->dma_rbuff_size = UART2_RX_DMA_LEN;
-  um->dma_sbuff_size = UART2_TX_DMA_LEN;
+  gUartMx->uart_rx_hdma = &hdma_usart2_rx;
+  gUartMx->uart_tx_hdma = &hdma_usart2_tx;
   
-  um->dma_rbuff = &uart2_dma_rbuff[0];
-  um->dma_sbuff = &uart2_dma_sbuff[0];
+  gUartMx->dma_rbuff_size = UART2_RX_DMA_LEN;
+  gUartMx->dma_sbuff_size = UART2_TX_DMA_LEN;
   
-  um->rxDataPool = DataPoolInit(UART2_RX_DATAPOOL_SIZE);
-  if ( um->rxDataPool == NULL ) {
+  gUartMx->dma_rbuff = &uart2_dma_rbuff[0];
+  gUartMx->dma_sbuff = &uart2_dma_sbuff[0];
+  
+  gUartMx->rxDataPool = DataPoolInit(UART2_RX_DATAPOOL_SIZE);
+  if ( gUartMx->rxDataPool == NULL ) {
     PRINT("uart2 rxdatapool null\r\n");
+    free(gUartMx);
+    return;
   }
   
-  um->txDataPool = DataPoolInit(UART2_TX_DATAPOOL_SIZE);
-  if ( um->txDataPool == NULL ) {
+  gUartMx->txDataPool = DataPoolInit(UART2_TX_DATAPOOL_SIZE);
+  if ( gUartMx->txDataPool == NULL ) {
     PRINT("uart2 txdatapool null\r\n");
+    free(gUartMx->rxDataPool);
+    free(gUartMx);
+    return;
   }
   
-  HAL_UART_Receive_DMA(um->uart, um->dma_rbuff, um->dma_rbuff_size);
+  HAL_UART_Receive_DMA(gUartMx->uart, gUartMx->dma_rbuff, gUartMx->dma_rbuff_size);
   //使能空闲中断，仅对接收起作用
-  __HAL_UART_ENABLE_IT(um->uart, UART_IT_IDLE);
+  __HAL_UART_ENABLE_IT(gUartMx->uart, UART_IT_IDLE);
 }
 
-//generate resp info
-bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
+/*
+*   生成resp信息
+*/
+static bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
 {
   if(NULL == pdev || NULL == pRespInfo)
   {
@@ -85,6 +98,9 @@ bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
       break;
     case 9:
       pRespInfo->resp_code = NORMAL_BUSY;
+      break;
+    case 99:
+      pRespInfo->resp_code = NORMAL_MOTOR_RUNNING;
       break;
     default:
       PRINT("generalRespInfo error : pdev->u8CMD = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);
@@ -168,16 +184,16 @@ bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
     
     break;
   case CMD_ADC_GET:
-    if(pdev->u8RESP > 100)
-    {
-      PRINT("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
-      return false;        
-    }
-    
+//    if(pdev->u8RESP > 100)
+//    {
+//      PRINT("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
+//      return false;        
+//    }
+//    
     pRespInfo->resp_code = pdev->u8RESP;
     pRespInfo->resp_data.identity = pdev->u32Identify;
-    
     break;
+    
   case DEVICE_ABNORMAL:
     switch(pdev->u8RESP)
     {
@@ -197,9 +213,9 @@ bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
       PRINT("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
       return false;
     }
-    
     pRespInfo->resp_data.endpointId = pdev->u16ID;
     break;
+    
   default:
     PRINT("generalRespInfo error : pdev->u8Cmd = %d\n", pdev->u8CMD);          
     return false;
@@ -210,70 +226,94 @@ bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
   return true;
 }
 
-void UartSendRespToF405(UartModule *um, DeviceNode *devn)
+/*
+*   向F405发送指令响应信息，成功返回true，失败返回false
+*/
+bool UartSendRespToF405(DeviceNode *devn)
 {
+  UartModule *um = gUartMx;
   T_Resp_Info resp;
-  if ( generalRespInfo(devn, &resp) ) {
-    DataPoolWrite(um->txDataPool, (uint8_t *)&resp, sizeof(T_Resp_Info));
-  }
-}
-
-void UartSendOnLineToF405(UartModule *um, uint16_t id)
-{ 
-  PRINT("dev[%04x] online\r\n", id);
-  T_Resp_Info resp;
-  resp.resp_code = NODE_ONLINE;
-  resp.resp_data.endpointId = id;
-  resp.crc = crc8_chk_value((uint8_t *)&resp, 5);
-  DataPoolWrite(um->txDataPool, (uint8_t *)&resp, sizeof(T_Resp_Info));
-}
-
-void UartSendOffLineToF405(UartModule *um, uint16_t id)
-{
-  PRINT("dev[%04x] offline\r\n", id);
-  T_Resp_Info resp;
-  resp.resp_code = NODE_OFFLINE;
-  resp.resp_data.endpointId = id;
-  resp.crc = crc8_chk_value((uint8_t *)&resp, 5);
-  DataPoolWrite(um->txDataPool, (uint8_t *)&resp, sizeof(T_Resp_Info));
-}
-
-void UartSendDeviceBusyToF405(UartModule *um, uint32_t identify)
-{
-  T_Resp_Info resp;
-  resp.resp_code = NORMAL_BUSY;
-  resp.resp_data.identity = identify;
-  resp.crc = crc8_chk_value((uint8_t *)&resp, 5);
-  DataPoolWrite(um->txDataPool, (uint8_t *)&resp, sizeof(T_Resp_Info));
-}
-
-static void send_all_node_to_f405(UartModule *um, FLASHDeviceList *list)
-{
-  SaveMSG *sm = list->Head->next;
   
-  while ( sm ) {
-    UartSendOnLineToF405(um, sm->u16DeviceID);
-    sm = sm->next;
+  if (generalRespInfo(devn, &resp)) {
+    if (DataPoolWrite(um->txDataPool, (uint8_t *)&resp, sizeof(T_Resp_Info))) {
+      return true;
+    }
   }
+  
+  return false;
+}
+
+/*
+*   向F405发送通知消息
+*/
+void UartSendMSGToF405(uint8_t status, uint16_t id, uint32_t identify)
+{
+  UartModule *um = gUartMx;
+  T_Resp_Info resp;
+  
+  resp.resp_code = status;
+  
+  switch(status)
+  {
+  case NODE_ONLINE:
+  case NODE_OFFLINE:
+  case NODE_NOTEXIST:
+    resp.resp_data.endpointId = id;
+    break;
+  case NORMAL_BUSY:
+    resp.resp_data.identity = identify;
+    break;
+  default:
+    break;
+  }
+  
+  resp.crc = crc8_chk_value((uint8_t *)&resp, 5);
+  DataPoolWrite(um->txDataPool, (uint8_t *)&resp, sizeof(T_Resp_Info));
+}
+
+/*
+*   获取uart module结构体
+*/
+UartModule *GetF405UartModule(UART_HandleTypeDef *huart)
+{
+  if ( huart->Instance == gUartMx->uart->Instance ) {
+    return gUartMx;
+  } else 
+    return NULL;
+}
+
+/*
+*   中断函数:F405接收函数
+*   在串口接收完成中断中被调用
+*/
+void F405ReveiveHandler(UART_HandleTypeDef *huart)
+{
+  if ( huart->Instance != gUartMx->uart->Instance ) 
+    return;
+  
+  CopyDataFromDMAHandler(gUartMx->uart);
+  HAL_UART_Receive_DMA(gUartMx->uart, 
+                       gUartMx->dma_rbuff,
+                       gUartMx->dma_rbuff_size);
 }
 
 /*
 *   F405命令处理线程
 *   F405只能控制由本机发送出去的设备ID，对于其他ID不进行操作
 */
-void F405CmdProcess(UartModule *um)
+void F405Task(void)
 {
-  DataPool *dp = um->rxDataPool;
-  DataPool *tdp = um->txDataPool;
+  DataPool *dp = gUartMx->rxDataPool;
+  DataPool *tdp = gUartMx->txDataPool;
   
   T_Control_Cmd cmd;
   
+  //F405命令接收处理
   if ( DataPoolGetNumByte(dp, (uint8_t *)(&cmd), sizeof(T_Control_Cmd)) ) {
     
     uint8_t crc = crc8_chk_value((uint8_t *)(&cmd), 7);
     
-    if(crc != cmd.crc)
-    {
+    if(crc != cmd.crc) {
       PRINT("receive cmd for F405 error: crc check error, crc = %02x, cmd.crc = %02x\r\n", crc, cmd.crc);
       return;
     }
@@ -283,18 +323,20 @@ void F405CmdProcess(UartModule *um)
     
     if ( CMD_GET_ALL_NODE == cmd.action ) {
       //接收到f405的上线响应信息，发送所有在线节点给405
-      send_all_node_to_f405(um, gFDList);
+      SendALLDeviceNodeToF405();
     } else {
-      set_device_of_list_cmd(gList, cmd.endpointId, cmd.action, cmd.identity);
+      if (SendCMDToList(cmd.endpointId, cmd.action, cmd.identity)  != true) {
+        //send device not exist msg to f405
+        UartSendMSGToF405(NODE_NOTEXIST, cmd.endpointId, 0);
+      }
     }
   }
   
-  if ( um->uart->gState == HAL_UART_STATE_READY ) {
-    if ( DataPoolGetNumByte(tdp, um->dma_sbuff, sizeof(T_Resp_Info))) {
-      //如果池中有6个字节，则复制到
-      PRINT("send resp to f405, resp=%d\r\n",um->dma_sbuff[0]);
-      
-      HAL_UART_Transmit_DMA(um->uart, um->dma_sbuff, sizeof(T_Resp_Info));
+  //F405发送数据处理
+  if ( gUartMx->uart->gState == HAL_UART_STATE_READY ) {
+    if ( DataPoolGetNumByte(tdp, gUartMx->dma_sbuff, sizeof(T_Resp_Info))) {
+      PRINT("send resp to f405, resp=%d\r\n",gUartMx->dma_sbuff[0]);
+      HAL_UART_Transmit_DMA(gUartMx->uart, gUartMx->dma_sbuff, sizeof(T_Resp_Info));
     }
   }
 }

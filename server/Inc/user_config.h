@@ -11,88 +11,31 @@ typedef enum {
   true,
 }bool;
 
-//#define PRINT(...) printf(__VA_ARGS__)
+#if 0
+#define PRINT(...) printf(__VA_ARGS__)
+#else
 #define PRINT(...)
+#endif
 
+//默认的服务器信道
 #define DEFAULT_CHANNEL 0x1e
 
-#define LORA_MSG_HEAD 0xA5
-#define LORA_MSG_TAIL 0x5A
-#define POOL_CLEAN    0x00
-
-
-//LoraModule Send MSG min timeinterval
-#define LORA_SEND_MIN_TIMEINTERVAL  50
-//电机运行状态信息，当发送CMD是电机动作时，resp等于该值
-#define MOTOR_RUNING          99   //地锁电机开始运行了
-
-//设备的指令执行状态，用于server本身cmd状态的跟踪
-#define CMD_STATUS_IDLE       100   //空闲状态
-#define CMD_STATUS_RUN        101   //正在运行
-#define CMD_STATUS_DONE       102   //运行完成
-#define CMD_STATUS_STOP       103   //超时停止运行
-#define CMD_STATUS_STANDBY    104   //有新指令，等待运行
+//Lora模块与endpoint通信的最小时间间隔，单位10ms
+//处于唤醒模式的Lora模块每条消息之间必须保持一定
+//的时间间隔才能正常附加唤醒码，否则不能正常通信
+#define LORA_SEND_MIN_TIMEINTERVAL  60
 
 //设置系统心跳的最大空闲时间，当对应设备空闲HEART_TIMESTAMP 秒后，发送一个心跳包
-#define HEART_TIMESTAMP         60
+#define HEART_TIMESTAMP         30
 //如果没有响应，重试次数
-#define CMD_MAX_RETRY_TIMES     5
+#define CMD_MAX_RETRY_TIMES     3
 //重试每次之间的间隔
-#define CMD_RETRY_TIMEINTERVAL  5 
+#define CMD_RETRY_TIMEINTERVAL  4 
 //CMD没有响应CMD_TIMEOUT秒后就认为超时
 #define CMD_TIMEOUT             5
 
 //每隔60秒保存一次设备信息到flash内
 #define FLASH_SAVE_TIMEINTERVAL   60
-
-//modify by liyongsheng begin
-//设备所能识别的cmd
-typedef enum 
-{
-  CMD_NONE              = 0,
-  CMD_MOTOR_UP          = 1,
-  CMD_MOTOR_DOWN        = 2,
-  CMD_MOTOR_STATUS_GET  = 3,
-  CMD_BEEP_ON           = 4,
-  CMD_BEEP_OFF          = 5,
-  CMD_BEEP_STATUS_GET   = 6,
-  CMD_ADC_GET           = 7,
-  CMD_GET_ALL_NODE      = 8,
-}CMD_TYPE;
-
-//server内部与endpoint之间的通信命令，与405 cmd共占用资源
-#define DEVICE_REGISTER     100
-#define DEVICE_HEART        101
-#define DEVICE_ABNORMAL     102
-
-typedef enum
-{
-  //Normal
-  NORMAL_SUCCESS = 101,
-  NORMAL_DOWN = 102,
-  NORMAL_FORWARD = 103,    
-  NORMAL_UP = 104,
-  NORMAL_BACK = 105,
-  NORMAL_BUSY = 106,
-  NORMAL_BEEP_OPEN_FAILED = 107,
-  NORMAL_BEEP_CLOSE_FAILED = 108,
-  NORMAL_BEEP_STATUS_OPEN = 109,
-  NORMAL_BEEP_STATUS_CLOSED = 110,
-
-  NODE_ONLINE = 120,
-  NODE_OFFLINE = 121,
-  
-  //interupt
-  INTERUPT_DOWN = 201,
-  INTERUPT_FORWARD = 202,    
-  INTERUPT_UP = 203,
-  INTERUPT_BACK = 204,  
-  
-  ERROR_CMD_TIMEOUT = 210,
-  
-}RESP_CODE;
-
-//modify by liyongsheng end
 
 //串口DMA数据空间
 //服务器发送到节点的命令长度
@@ -117,7 +60,6 @@ typedef enum
 #define UART2_RX_DMA_LEN        64
 #define UART2_RX_DATAPOOL_SIZE  128
 
-
 //目标设备的信息
 #pragma pack(1)
 typedef struct {
@@ -126,31 +68,5 @@ typedef struct {
   uint32_t  u32Identify;
 } Device;
 #pragma pack()
-
-//LORA Receive所占用的引脚
-//PA8 M0
-#define GPIO_Lora_M0_R 	        GPIOA
-#define GPIO_Lora_M0_R_Pin	GPIO_PIN_8
-//PA12 M1
-#define GPIO_Lora_M1_R	        GPIOA
-#define GPIO_Lora_M1_R_Pin	GPIO_PIN_12
-//PA11 AUX
-#define GPIO_Lora_AUX_R	        GPIOA
-#define GPIO_Lora_AUX_R_Pin	GPIO_PIN_11
-
-//LORA Send所占用的引脚
-//PB13 M0
-#define GPIO_Lora_M0_S          GPIOB
-#define GPIO_Lora_M0_S_Pin      GPIO_PIN_13
-//PB12 M1
-#define GPIO_Lora_M1_S          GPIOB
-#define GPIO_Lora_M1_S_Pin      GPIO_PIN_12
-//PA4 AUX
-#define GPIO_Lora_AUX_S         GPIOA
-#define GPIO_Lora_AUX_S_Pin     GPIO_PIN_4
-
-//PA7 led
-#define GPIO_LED                GPIOA
-#define GPIO_LED_Pin            GPIO_PIN_7
 
 #endif
