@@ -3,11 +3,8 @@
 
 #include "stdint.h"
 #include "stm32f1xx.h"
-#include "lora_paramter.h"
 #include "lora_datapool.h"
-#include "list.h"
 #include "user_config.h"
-#include "crc16.h"
 
 //Lora通信相关宏
 #define LORA_MSG_HEAD 0xA5
@@ -98,15 +95,17 @@ typedef struct {
   uint8_t   u8Tail;
 } CmdDataPacket;
 
+//gpio 结构体
 typedef struct {
-  GPIO_TypeDef  *GPIOX;
-  uint16_t      Pin;
+  GPIO_TypeDef  *GPIOX;   //端口
+  uint16_t      Pin;      //引脚  
 } LoraPin;
 
+//lora引脚配置结构体
 typedef struct {
-  LoraPin AUX;
-  LoraPin M0;
-  LoraPin M1;
+  LoraPin AUX;            //aux引脚
+  LoraPin M0;             //m0功能引脚
+  LoraPin M1;             //m1功能引脚
 } LoraGPIO;
 
 //串口结构体
@@ -130,9 +129,9 @@ typedef struct {
 typedef struct {
   volatile bool  isIdle; //IDLE FLAG
   Lora_Mode       mode;   //work mode
-  LoraPar         paramter;
-  LoraGPIO        gpio;
-  UartModule      muart;
+  LoraPar         paramter;//lora参数结构体
+  LoraGPIO        gpio;     //lora gpio结构体
+  UartModule      muart;    //lora 串口结构体
 } LoraModule;
 
 //modify by liyongsheng begin

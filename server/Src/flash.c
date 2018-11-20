@@ -1,7 +1,6 @@
 #include "flash.h"
 #include "stm32f1xx.h"
 #include "stdlib.h"
-#include "lora.h"
 #include "maincontrol.h"
 #include "rtc.h"
 #include "list.h"

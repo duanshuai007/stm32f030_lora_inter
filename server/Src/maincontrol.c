@@ -2,15 +2,9 @@
 #include "stdint.h"
 #include "stm32f1xx.h"
 #include "stm32f1xx_hal.h"
-#include "stm32f1xx_hal_def.h"
-#include "stm32f1xx_hal_gpio.h"
-#include "stm32f1xx_hal_uart.h"
-#include "crc16.h"
 #include "user_config.h"
-#include "list.h"
-#include "string.h"
 #include "stdlib.h"
-#include "lora_datapool.h"
+#include "crc16.h"
 #include "flash.h"
 
 extern UART_HandleTypeDef huart2;

@@ -2,7 +2,7 @@
 #define _STM32_FLASH_H_
 
 #include "stdint.h"
-#include "list.h"
+#include "user_config.h"
 
 #define FLASH_DATABASE_START  0x0800f000
 #define SAVE_MESSAGE_HEAD     0xA5B4C3D2
@@ -25,7 +25,7 @@ typedef struct SaveMSG{
 
 typedef struct {
   uint8_t u8Total; //总设备数量
-  SaveMSG *Head;
+  SaveMSG *Head;  //head是链表头，不表示任何设备
 } FLASHDeviceList;
 
 #define READ_FLASH_WORD(addr) (*(volatile uint32_t *)(addr))

@@ -1,7 +1,6 @@
 #include "rtc.h"
 #include "stdint.h"
 #include "stm32f1xx.h"
-#include "stm32f1xx_hal_def.h"
 
 extern RTC_HandleTypeDef hrtc;
 

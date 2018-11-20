@@ -6,11 +6,11 @@
 
 #pragma pack(1)
 typedef struct {
-  uint16_t u16Start;
-  uint16_t u16End;
-  uint16_t u16MaxSize;
-  bool  FullFlag;
-  uint8_t  *pool;
+  uint16_t u16Start;    //数据池的等待读取的开始地址
+  uint16_t u16End;      //等待读取的结束地址
+  uint16_t u16MaxSize;  //最大空间
+  bool  FullFlag;       //数据池存满标志
+  uint8_t  *pool;       //数据池的数据缓冲指针
 } DataPool;
 #pragma pack()
 

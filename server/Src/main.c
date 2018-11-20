@@ -41,11 +41,8 @@
 #include "stm32f1xx_hal.h"
 
 /* USER CODE BEGIN Includes */
-#include "stdlib.h"
 #include "Lora.h"
-#include "lora_datapool.h"
 #include "maincontrol.h"
-#include "rtc.h"
 #include "flash.h"
 /* USER CODE END Includes */
 

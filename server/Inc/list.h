@@ -21,10 +21,10 @@ typedef struct DeviceNode {
   
   uint16_t u16ID;           //设备ID
   uint8_t u8CHAN;           //信道
-  uint8_t u8CMD;
+  uint8_t u8CMD;            //设备的指令  
   
-  uint8_t u8CMDSTATUS;
-  uint8_t u8RESP;
+  uint8_t u8CMDSTATUS;      //指令执行状态
+  uint8_t u8RESP;           //地锁的响应
   uint8_t u8CMDRetry;       //cmd没有影响重试的次数
 } DeviceNode;
 

@@ -2,9 +2,9 @@
 #define _MAINCONTROL_H_
 
 #include "stdint.h"
-#include "stm32f1xx.h"
 #include "user_config.h"
 #include "lora.h"
+#include "list.h"
 
 //设备所能识别的cmd
 typedef enum 
@@ -28,26 +28,26 @@ typedef enum
 typedef enum
 {
   //Normal
-  NORMAL_SUCCESS = 101,
-  NORMAL_DOWN = 102,
-  NORMAL_FORWARD = 103,    
-  NORMAL_UP = 104,
-  NORMAL_BACK = 105,
-  NORMAL_BUSY = 106,
-  NORMAL_BEEP_OPEN_FAILED = 107,
-  NORMAL_BEEP_CLOSE_FAILED = 108,
-  NORMAL_BEEP_STATUS_OPEN = 109,
+  NORMAL_SUCCESS            = 101,
+  NORMAL_DOWN               = 102,
+  NORMAL_FORWARD            = 103,    
+  NORMAL_UP                 = 104,
+  NORMAL_BACK               = 105,
+  NORMAL_BUSY               = 106,
+  NORMAL_BEEP_OPEN_FAILED   = 107,
+  NORMAL_BEEP_CLOSE_FAILED  = 108,
+  NORMAL_BEEP_STATUS_OPEN   = 109,
   NORMAL_BEEP_STATUS_CLOSED = 110,
-  NORMAL_MOTOR_RUNNING  = 111,
+  NORMAL_MOTOR_RUNNING      = 111,
 
-  NODE_ONLINE = 120,
-  NODE_OFFLINE = 121,
-  NODE_NOTEXIST = 122,
+  NODE_ONLINE               = 120,
+  NODE_OFFLINE              = 121,
+  NODE_NOTEXIST             = 122,
   //interupt
-  INTERUPT_DOWN = 201,
-  INTERUPT_FORWARD = 202,    
-  INTERUPT_UP = 203,
-  INTERUPT_BACK = 204,
+  INTERUPT_DOWN             = 201,
+  INTERUPT_FORWARD          = 202,    
+  INTERUPT_UP               = 203,
+  INTERUPT_BACK             = 204,
 }RESP_CODE;
 
 /*
