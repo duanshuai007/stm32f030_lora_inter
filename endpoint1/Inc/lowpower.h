@@ -3,6 +3,7 @@
 
 #include "stdint.h"
 #include "stm32f0xx_hal.h"
+#include "user_config.h"
 
 /*
 *   每次进入低功耗模式之前都要调用，
@@ -11,7 +12,7 @@
 *   需要运行一段时间才能返回。mode = 0 对应即时返回 = 1对应非即时返回
 *   flag：对应异常动作标志，产生异常动作不同于命令控制 =1 对应有异常动作产生
 */
-void LowPowerInit(uint8_t mode, uint8_t flag);
+void LowPowerInit(bool mode, bool flag);
 
 /*
 *   系统上电后会调用
@@ -23,7 +24,7 @@ void CloseNotUsedPeriphClock(void);
 *   处理控制命令，同步命令返回0
 *   异步命令返回1
 */
-uint8_t ProcessTheData(void);
+bool ExecCMD(void);
 
 /*
 *   每次从低功耗模式被唤醒后需要重新初始化串口

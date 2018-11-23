@@ -29,7 +29,7 @@ enum {
 #define MODE_OLD
 
 //重要，设置目标的id，必须配置为目标lora模块的地址
-#define TARGET_ID      25
+#define TARGET_ID      50
 
 #pragma pack(1)
 typedef struct {

@@ -13,7 +13,9 @@
 Motor motor;
 
 extern Device gDevice;
-extern TIM_HandleTypeDef htim6;
+//extern TIM_HandleTypeDef htim6;
+
+extern uint8_t uart2_dma_rbuff[4];
 
 //传感器的四个状态 旧版本地锁
 //up    down
@@ -126,9 +128,6 @@ void motor_gpio_cb(uint16_t pin)
       }
     } else if (MOTOR_CMD_DOWN == motor.action){
       if (MOTOR_DOWN == status) {
-//        HAL_Delay(1);   //经过测试，在stm32f103休眠模式方式工作时，会导致地锁倒下时不能正常的停止。
-        //延时时间是当地锁落下时如果有东西挡住了，会出现检测到DOWN位置的状
-        //所以需要短暂延时后再判断一下
         if (get_status() == status) {
           motor_stop();
           rtc_disable();
@@ -170,8 +169,27 @@ static void motor_ctrl_cb(MOTOR_CB_TYPE m)
   gDevice.u8CmdDone = 1;
 }
 
+/*
+*   获取超声波测量的距离值
+*/
+static uint16_t get_distance(void)
+{
+  UltraSonicType *ust = (UltraSonicType *)uart2_dma_rbuff;
+  if ( ust->head == 0xff ) {
+    if ((( ust->head + ust->data_h + ust->data_l ) & 0xff) == ust->sum) {
+      return (((uint16_t)ust->data_h) << 8 | ust->data_l);
+    }
+  }
+  
+  return 0xffff;
+}
+
+
 MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd) 
 {
+  uint8_t retry= 0;
+  uint16_t dat = 0;
+  uint16_t ret;
   //电机当前忙
   if(motor.action != MOTOR_CMD_IDLE)
     return MOTOR_RUNNING;
@@ -180,12 +198,28 @@ MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd)
   
   //如果命令时UP，那么当前状态如果是DOWN或QIANQING的话，当达到HOUQING狂态就可以停止
   //如果命令是UP，那么当前状态是后倾的话，当达到前倾的时候就可以停止
-  
   if(cmd == MOTOR_CMD_UP) {
     if (( MOTOR_DOWN == motor.status ) || ( MOTOR_QIANQING == motor.status )){
       motor.can_stop = MOTOR_HOUQING;
     } else if ( MOTOR_HOUQING == motor.status) {
       motor.can_stop = MOTOR_QIANQING;
+    }
+    //判断地锁上是否有障碍物，地锁能不能抬起
+    //重复读取五次的测量值，多次测量能避免错误
+    while(retry < 5) {
+      ret = get_distance();
+      if (ret != 0xffff) {
+        dat += ret;
+        retry++;
+      }
+      HAL_Delay(100);
+    }
+    
+    dat /= 5;
+    //单位:毫米
+    if ( dat < 400 ) {
+      //小于安全距离就认为车位有车，不抬杠
+      return MOTOR_ERROR;
     }
   }
 
@@ -227,12 +261,7 @@ void motor_init(void)
   motor_ctrl_cb_register(motor_ctrl_cb);
   //注册引脚中断回调函数，该函数为中断内调用。
   motor_gpio_cb_register(motor_gpio_cb);
-  
-  //禁止定时器功能  
-  motor.xiaodou_timer.enable = false;
-  motor.xiaodou_timer.cur_count = 0;
-  motor.xiaodou_timer.max_count = 0;
-  
+ 
   motor.ctrl_timer_cb = motor_timer_ctrl_timeout_cb;
 }
 
@@ -296,13 +325,13 @@ static void LoraSendAbnormalMSG(void)
   gDevice.u8Cmd = HW_MOTOR_ABNORMAL;
   gDevice.u8Resp = motor.status;
   
-  LoraTransfer(&gDevice, NORMALCMD);
+  LoraTransfer(NORMALCMD);
   
   gDevice.u8Cmd = HW_CMD_NONE;
   gDevice.u8Resp = 0;
 }
 
-uint8_t motor_abnormal(void)
+bool motor_abnormal(void)
 {
   //如果发现了异常动作标志
   if ((gDevice.u8InteFlag == 1) && (gDevice.u8InterDone == 0)) {
@@ -310,22 +339,21 @@ uint8_t motor_abnormal(void)
     rtc_set_timer(1);
     gDevice.u8InteFlag = 0;
     gDevice.u8InterDone = 1;
-    return 1;
+    return true;
   } else if ( gDevice.u8InterDone ) {
     //唤醒后
     gDevice.u8InterDone = 0;
     motor_input_pin_off_interrupt(false);
-    //do resp
-    
+
     MOTOR_STATUS last = motor.last_status;
     
     if ( motor.status != last ) {
       LoraSendAbnormalMSG();
       motor.last_status = motor.status;
     }
-    return 0;
+    return false;
   }
   
-  return 0;
+  return false;
 }
 

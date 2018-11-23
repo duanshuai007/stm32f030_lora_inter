@@ -8,7 +8,6 @@
 #include "motor.h"
 #include "rtc.h"
 
-extern uint8_t gOnlineFlag;
 extern ADC_HandleTypeDef hadc;
 
 uint8_t hardware_ctrl(HW_CMD cmd)
@@ -35,7 +34,7 @@ uint8_t hardware_ctrl(HW_CMD cmd)
   case HW_BEEP_GET:       //beep get status, Synchronization
     ret = beep_ctrl(BEEP_GET);
     break;
-  case HW_ADC_GET:        //adc get, Asynchronous
+  case HW_ADC_GET:        //adc get, Synchronization
     HAL_ADC_Start(&hadc);
     while(!__HAL_ADC_GET_FLAG(&hadc, ADC_FLAG_EOC));
     ret = HAL_ADC_GetValue(&hadc);
@@ -62,17 +61,3 @@ uint8_t hardware_ctrl(HW_CMD cmd)
   return ret;
 }
 
-#if 0
-void ReadUID(UID *uid)
-{
-  uint32_t temp;
-  
-  temp = (*(volatile unsigned int *)(UID_BASEADDRESS));
-  uid->u32CoordinatesXY = temp;
-  temp = (*(volatile unsigned int *)(UID_BASEADDRESS + 4));
-  uid->u8WaferNumber = (uint8_t)(temp & 0xff);
-  uid->u64LotNumber = (temp & 0xffffff00) >> 8;
-  temp = (*(volatile unsigned int *)(UID_BASEADDRESS + 8));
-  uid->u64LotNumber |= ((uint64_t)temp << 24); 
-}
-#endif

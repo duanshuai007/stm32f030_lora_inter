@@ -1,35 +1,35 @@
 /**
-******************************************************************************
-* @file    stm32f0xx_it.c
-* @brief   Interrupt Service Routines.
-******************************************************************************
-*
-* COPYRIGHT(c) 2018 STMicroelectronics
-*
-* Redistribution and use in source and binary forms, with or without modification,
-* are permitted provided that the following conditions are met:
-*   1. Redistributions of source code must retain the above copyright notice,
-*      this list of conditions and the following disclaimer.
-*   2. Redistributions in binary form must reproduce the above copyright notice,
-*      this list of conditions and the following disclaimer in the documentation
-*      and/or other materials provided with the distribution.
-*   3. Neither the name of STMicroelectronics nor the names of its contributors
-*      may be used to endorse or promote products derived from this software
-*      without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*
-******************************************************************************
-*/
+  ******************************************************************************
+  * @file    stm32f0xx_it.c
+  * @brief   Interrupt Service Routines.
+  ******************************************************************************
+  *
+  * COPYRIGHT(c) 2018 STMicroelectronics
+  *
+  * Redistribution and use in source and binary forms, with or without modification,
+  * are permitted provided that the following conditions are met:
+  *   1. Redistributions of source code must retain the above copyright notice,
+  *      this list of conditions and the following disclaimer.
+  *   2. Redistributions in binary form must reproduce the above copyright notice,
+  *      this list of conditions and the following disclaimer in the documentation
+  *      and/or other materials provided with the distribution.
+  *   3. Neither the name of STMicroelectronics nor the names of its contributors
+  *      may be used to endorse or promote products derived from this software
+  *      without specific prior written permission.
+  *
+  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  *
+  ******************************************************************************
+  */
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f0xx_hal.h"
 #include "stm32f0xx.h"
@@ -41,15 +41,16 @@
 #include "motor.h"
 
 extern LoraPacket gLoraPacket;
-extern RTC_HandleTypeDef hrtc;
+extern uint8_t uart2_dma_rbuff[4];
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
 extern RTC_HandleTypeDef hrtc;
-extern TIM_HandleTypeDef htim6;
 extern DMA_HandleTypeDef hdma_usart1_rx;
 extern DMA_HandleTypeDef hdma_usart1_tx;
+extern DMA_HandleTypeDef hdma_usart2_rx;
 extern UART_HandleTypeDef huart1;
+extern UART_HandleTypeDef huart2;
 
 /******************************************************************************/
 /*            Cortex-M0 Processor Interruption and Exception Handlers         */ 
@@ -180,17 +181,17 @@ void DMA1_Channel2_3_IRQHandler(void)
 }
 
 /**
-* @brief This function handles TIM6 global interrupt.
+* @brief This function handles DMA1 channel 4 and 5 interrupts.
 */
-void TIM6_IRQHandler(void)
+void DMA1_Channel4_5_IRQHandler(void)
 {
-  /* USER CODE BEGIN TIM6_IRQn 0 */
-  
-  /* USER CODE END TIM6_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim6);
-  /* USER CODE BEGIN TIM6_IRQn 1 */
-  
-  /* USER CODE END TIM6_IRQn 1 */
+  /* USER CODE BEGIN DMA1_Channel4_5_IRQn 0 */
+
+  /* USER CODE END DMA1_Channel4_5_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart2_rx);
+  /* USER CODE BEGIN DMA1_Channel4_5_IRQn 1 */
+
+  /* USER CODE END DMA1_Channel4_5_IRQn 1 */
 }
 
 /**
@@ -207,19 +208,30 @@ void USART1_IRQHandler(void)
   if(__HAL_UART_GET_IT(&huart1,UART_IT_IDLE)!=RESET)
   {
     __HAL_UART_CLEAR_IT(&huart1, UART_CLEAR_IDLEF);
-    CopyDataFromDMA();
   }
   /* USER CODE END USART1_IRQn 1 */
+}
+
+/**
+* @brief This function handles USART2 global interrupt.
+*/
+void USART2_IRQHandler(void)
+{
+  /* USER CODE BEGIN USART2_IRQn 0 */
+
+  /* USER CODE END USART2_IRQn 0 */
+  HAL_UART_IRQHandler(&huart2);
+  /* USER CODE BEGIN USART2_IRQn 1 */
+  if(__HAL_UART_GET_IT(&huart2,UART_IT_IDLE)!=RESET)
+  {
+    __HAL_UART_CLEAR_IT(&huart2, UART_CLEAR_IDLEF);
+  }
+  /* USER CODE END USART2_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
 
 extern Motor motor;
-
-//void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-//{
-  //    motor.xiaodou_timer_cb();
-//}
 
 void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
 {
@@ -230,15 +242,9 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  //AUX interrupt
-  
   if(GPIO_Lora_AUX_Pin == GPIO_Pin)
-  {   //AUX CHANGE
-    if ( HAL_GPIO_ReadPin(GPIO_Lora_AUX, GPIO_Lora_AUX_Pin) == GPIO_PIN_SET ) {
-      gLoraPacket.isIdle = 1;
-    } else {
-      gLoraPacket.isIdle = 0;
-    }
+  {   //AUX interrupt
+    LoraModuleIsIdleHandler();
   } else {
     //gpio回调函数
     if ( motor.gpio_cb ) {
@@ -249,8 +255,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-  CopyDataFromDMA();
-  HAL_UART_Receive_DMA(&huart1, gLoraPacket.dma_rbuff, MAX_DMA_LEN);
+  if ( huart->Instance == USART1 ) {
+    LoraModuleReceiveHandler();
+  } else if ( huart->Instance == USART2 ) {
+    HAL_UART_Receive_DMA(&huart2, uart2_dma_rbuff, 4);
+  }
 }
 
 //错误处理

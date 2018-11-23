@@ -19,11 +19,13 @@ typedef void (* motor_check_callback)(MOTOR_CB_TYPE m);
 typedef void (* motor_gpio_callback)(uint16_t pin);
 typedef void (* timer_gpio_xd_callback)(void);
 typedef void (* timer_ctrl_timeout_callback)(void);
-typedef struct {                  
-    bool        enable;
-    uint8_t    max_count;       //最大定时时长为 100×255 = 25.5S
-    uint8_t    cur_count;
-} motor_timer;
+
+typedef struct {
+  uint8_t head;
+  uint8_t data_h;
+  uint8_t data_l;
+  uint8_t sum;
+} UltraSonicType;
 
 typedef struct {
     volatile MOTOR_STATUS status;     //电机当前状态 1=卧倒,2=前倾,3=直立,4=后倾
@@ -33,16 +35,10 @@ typedef struct {
     MOTOR_STATUS can_stop; //开始运动时的位置状态，用来对电机上升时进行停止判断。
 
     motor_ctrl_callback         ctrl_cb;
-    motor_check_callback        check_cb;
     motor_gpio_callback         gpio_cb;
-    //htim6
-    motor_timer                 xiaodou_timer;
-//    timer_gpio_xd_callback      xiaodou_timer_cb;
-    //rtc alarm
     timer_ctrl_timeout_callback ctrl_timer_cb;
 } Motor;
 
-//系统接口
 //电机控制函数
 MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd);
 //获取电机位置状态的函数
@@ -54,6 +50,6 @@ void motor_init(void);
 void motor_input_pin_off_interrupt(bool b);
 
 //电机异常动作处理
-uint8_t motor_abnormal(void);
+bool motor_abnormal(void);
 
 #endif

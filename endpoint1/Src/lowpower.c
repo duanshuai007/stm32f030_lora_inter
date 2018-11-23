@@ -11,11 +11,12 @@
 #include "hardware.h"
 
 extern UART_HandleTypeDef huart1;
-extern TIM_HandleTypeDef htim6;
+extern UART_HandleTypeDef huart2;
 extern ADC_HandleTypeDef hadc;
 
 extern LoraPacket gLoraPacket;
 extern Device gDevice;
+extern uint8_t uart2_dma_rbuff[4];
 
 //进入stop模式之前要重新根据当时的电平设置上拉下拉
 static void set_gpio(GPIO_TypeDef* GPIOx, uint16_t pin, uint32_t mode)
@@ -27,13 +28,10 @@ static void set_gpio(GPIO_TypeDef* GPIOx, uint16_t pin, uint32_t mode)
   if (HAL_GPIO_ReadPin(GPIOx, pin) == GPIO_PIN_SET) {
     GPIO_InitStruct.Pull = GPIO_PULLUP;
     HAL_GPIO_Init(GPIOx, &GPIO_InitStruct);
-    //    HAL_GPIO_WritePin(GPIOx, pin, GPIO_PIN_SET);
   } else {
     GPIO_InitStruct.Pull = GPIO_PULLDOWN;
     HAL_GPIO_Init(GPIOx, &GPIO_InitStruct);
-    //    HAL_GPIO_WritePin(GPIOx, pin, GPIO_PIN_RESET);
   }
-  
 }
 
 static void gpio_used_lp_init(void)
@@ -66,14 +64,15 @@ static void gpio_used_lp_init(void)
 //0 关闭所有
 //1 保留adc 
 //2 保留rtc lsi， motor指令
-void LowPowerInit(uint8_t mode, uint8_t flag)
+void LowPowerInit(bool mode, bool flag)
 {   
   //必须停止，否则功耗会在1ma左右
   HAL_UART_Abort_IT(&huart1);
+  HAL_UART_Abort_IT(&huart2);
   
   gpio_used_lp_init();
   
-  if ((0 == mode) && (0 == flag)) {
+  if ((false == mode) && (false == flag)) {
     __HAL_RCC_RTC_DISABLE();
     __HAL_RCC_LSI_DISABLE(); 
   }
@@ -81,6 +80,7 @@ void LowPowerInit(uint8_t mode, uint8_t flag)
   __HAL_RCC_ADC1_CLK_DISABLE();
   __HAL_RCC_TIM6_CLK_DISABLE();
   __HAL_RCC_USART1_CLK_DISABLE();
+  __HAL_RCC_USART2_CLK_DISABLE();
   __HAL_RCC_DMA1_CLK_DISABLE();
   
   __HAL_RCC_PWR_CLK_ENABLE();
@@ -95,11 +95,12 @@ static void gpio_not_used_lp_init(void)
   /*
   *       GPIOA中涉及到引脚包括
   *       M0(PA8),K1(PA4),K2(PA5),K3传感器使能(PA6)
+  *       PA2,PA3 是串口2的引脚
   *       PA8和PA6 是输出模式
   *       PA4和PA5 是中断模式
   *       在进入休眠前根据电平值设置上拉或下拉
   */
-  GPIO_InitStruct.Pin = (GPIO_PIN_All & (~( GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_8 | GPIO_PIN_6 )));
+  GPIO_InitStruct.Pin = (GPIO_PIN_All & (~( GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_8 | GPIO_PIN_6 )));
   //| GPIO_PIN_13 | GPIO_PIN_14 )));
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;    //在这种模式下电流最小
   GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -146,6 +147,7 @@ void CloseNotUsedPeriphClock(void)
   __HAL_RCC_SYSCFG_CLK_DISABLE();
   __HAL_RCC_TIM1_CLK_DISABLE();
   __HAL_RCC_TIM3_CLK_DISABLE();
+  __HAL_RCC_TIM6_CLK_DISABLE();
   __HAL_RCC_TIM14_CLK_DISABLE();
   __HAL_RCC_TIM15_CLK_DISABLE();
   __HAL_RCC_TIM16_CLK_DISABLE();
@@ -171,7 +173,7 @@ void CloseNotUsedPeriphClock(void)
 }
 
 //唤醒后再次进入休眠时关闭使用过的外设
-static void periph_used_in_motor_init(TIM_HandleTypeDef *htim)
+static void periph_used_in_motor_init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct;
   
@@ -194,18 +196,6 @@ static void periph_used_in_motor_init(TIM_HandleTypeDef *htim)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-  
-  __HAL_RCC_TIM6_CLK_ENABLE();
-  
-  htim->Instance = TIM6;
-  htim->Init.Prescaler = 2000;
-  htim->Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim->Init.Period = 100;
-  htim->Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(htim) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
 }
 
 static void periph_used_in_beep_init(void)
@@ -258,15 +248,32 @@ static void periph_used_in_adc_init(ADC_HandleTypeDef *hadc)
   }
 }
 
+static void uart2_reinit(void)
+{
+  __HAL_RCC_USART2_CLK_ENABLE();
+  HAL_UART_DeInit(&huart2);
+  
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 9600;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  HAL_UART_Init(&huart2);
+  
+  HAL_UART_Receive_DMA(&huart2, uart2_dma_rbuff, 4);
+  //使能空闲中断，仅对接收起作用
+  __HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
+}
+
 void UART_ReInit(UART_HandleTypeDef *huart)
 {
   __HAL_RCC_USART1_CLK_ENABLE();
-  
   HAL_UART_DeInit(huart);
-  //在低功耗模式下，每次dma接收都是从0开始，pos是为了每次接收完毕记住当前的位置
-  //是为了在普通模式下循环接收而设置的
-  gLoraPacket.pos = 0;
-  
   huart->Instance = USART1;
   huart->Init.BaudRate = 57600;
   huart->Init.WordLength = UART_WORDLENGTH_9B;
@@ -285,10 +292,11 @@ void InitPeriphByCMD(void)
   switch(gDevice.u8Cmd)
   {
   case HW_MOTOR_UP:
+    uart2_reinit();
   case HW_MOTOR_DOWN:
   case HW_MOTOR_GET:
     //驱动电机用到的外设资源包括，gpio(PB4\5,PA4\5\6,TIM6)
-    periph_used_in_motor_init(&htim6);
+    periph_used_in_motor_init();
     break;
   case HW_BEEP_ON:
   case HW_BEEP_OFF:
@@ -317,7 +325,7 @@ uint8_t SyncCMDDone(void)
     
     if ((CMD_RUN == gDevice.u8CmdRunning) && ( 1 == gDevice.u8CmdDone)) {
     
-      LoraTransfer(&gDevice, NORMALCMD);
+      LoraTransfer(NORMALCMD);
       
       gDevice.u8CmdDone = 0;
       //发送完成，清空状态标志信息，准备再次接收执行指令
@@ -329,13 +337,12 @@ uint8_t SyncCMDDone(void)
       gDevice.u8CmdRunning = CMD_STOP;
       
       ret = 1;
-      
     } else if (gDevice.u8ReCmdFlag) {
       //在指令执行过程中接收到新指令，返回繁忙状态
       gDevice.u8ReCmdFlag = 0;
       gDevice.u8Resp = HW_BUSY;
       
-      LoraTransfer(&gDevice, RECMD);
+      LoraTransfer(RECMD);
       
       ret = 2;
     }
@@ -344,9 +351,9 @@ uint8_t SyncCMDDone(void)
   return ret;
 }
 
-uint8_t ProcessTheData(void)
+bool ExecCMD(void)
 {   
-  uint8_t mode = 0;
+  bool mode = false;
   
   if (HW_CMD_NONE != gDevice.u8Cmd) {
     
@@ -362,7 +369,7 @@ uint8_t ProcessTheData(void)
       if (gDevice.u8Cmd > HW_MOTOR_DOWN ) {
         //give server some response
         gDevice.u8Resp = ret;
-        LoraTransfer(&gDevice, NORMALCMD);
+        LoraTransfer(NORMALCMD);
         //指令执行结束，清空状态信息
         gDevice.u8Cmd = HW_CMD_NONE;
         gDevice.u8Resp = 0;
@@ -373,10 +380,18 @@ uint8_t ProcessTheData(void)
         if ( ret == MOTOR_OK ) {
           //正常执行动作后立刻返回一个响应信息
           gDevice.u8Resp = MOTOR_RUN;
-          LoraTransfer(&gDevice, NORMALCMD);
-        } 
+          LoraTransfer(NORMALCMD);
+        }
         else if (ret == MOTOR_DONTDO) {
-          LoraTransfer(&gDevice, NORMALCMD);
+          //电机处于目标状态不需要执行动作
+          LoraTransfer(NORMALCMD);
+          gDevice.u8Cmd = HW_CMD_NONE;
+          gDevice.u8Resp = 0;
+          gDevice.u8CmdRunning = CMD_STOP;
+          gDevice.u8CmdDone = 0;
+        } else if ( ret == MOTOR_ERROR ) {
+          gDevice.u8Resp = MOTOR_CANTUP;
+          LoraTransfer(NORMALCMD);
           gDevice.u8Cmd = HW_CMD_NONE;
           gDevice.u8Resp = 0;
           gDevice.u8CmdRunning = CMD_STOP;
@@ -386,9 +401,9 @@ uint8_t ProcessTheData(void)
     }
     
     if ((gDevice.u8Cmd == HW_MOTOR_UP) || (gDevice.u8Cmd == HW_MOTOR_DOWN)) {
-      mode = 1;
+      mode = true;
     } else {
-      mode = 0;
+      mode = false;
     }
   }
   

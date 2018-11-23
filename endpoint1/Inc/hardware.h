@@ -46,7 +46,11 @@ typedef enum {
   MOTOR_QIANQING  = 2,
   MOTOR_UP        = 3,
   MOTOR_HOUQING   = 4,
+  MOTOR_ERROR     = 5,  //地锁上有东西，不能抬起来
+  
   MOTOR_RUN = 99,
+  MOTOR_CANTUP  = 100,
+  
   MOTOR_DONTDO = 0xff,
 } MOTOR_STATUS;
 

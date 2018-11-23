@@ -5,10 +5,7 @@
 #include "stm32f0xx.h"
 #include "lora_paramter.h"
 #include "user_config.h"
-
-#define USE_INTERRUPT
-
-#define MAX_DMA_LEN     64
+#include "lora_datapool.h"
 
 #define NORMALCMD   1
 #define RECMD       0
@@ -21,13 +18,6 @@ typedef enum {
     LoraMode_LowPower,
     LoraMode_Sleep,
 }Lora_Mode;
-
-typedef struct {
-    uint8_t u8Head;
-    uint8_t u8LoraMHZ;
-    uint8_t u8Version;
-    uint8_t u8Nummy;
-} LoraVersion;
 
 typedef struct {
     uint16_t u16Addr;    
@@ -45,8 +35,7 @@ typedef struct {
     uint8_t u8SendDB;           //0-1bit
 } LoraPar;
 
-//new modify start
-//èŠ‚ç‚¹respç»“æ„ä½“
+//½Úµãresp½á¹¹Ìå
 typedef struct {
   uint8_t   u8Head;
   uint8_t   u8Len;
@@ -58,7 +47,7 @@ typedef struct {
   uint8_t   u8Tail;
 } RespDataPacket;
 
-//æœåŠ¡å™¨cmdç»“æ„ä½“
+//·şÎñÆ÷cmd½á¹¹Ìå
 typedef struct {
   uint8_t   u8Head;
   uint8_t   u8Len;
@@ -68,41 +57,52 @@ typedef struct {
   uint16_t  u16Crc;
   uint8_t   u8Tail;
 } CmdDataPacket;
-//new modify end 
 
 typedef struct {
-    volatile uint8_t    pos;    //buffer current postion
-    volatile uint8_t    isIdle; //IDLE FLAG
+    volatile bool     isIdle; //IDLE FLAG
   
-    Lora_Mode           mode;   //work mode
-    LoraPar             paramter;
+    Lora_Mode mode;   //work mode
+    LoraPar   paramter;
 
-    uint8_t             dma_sbuff[20]; //dma send buffer
-    uint8_t             dma_rbuff[MAX_DMA_LEN]; //dma receive buffer
+    uint8_t   dma_sbuff_size;
+    uint8_t   dma_rbuff_size;
+    
+    uint8_t   *dma_sbuff; //dma send buffer
+    uint8_t   *dma_rbuff; //dma receive buffer
 } LoraPacket;
 
 #pragma pack()
 
+
+void LoraModuleInit(void);
+
 //When setting or reading parameters, the serial port must be no parity.
-void LoraSetParamter(LoraPacket *lm, 
-                     uint16_t addr, 
-                     BaudType baud, 
-                     CHANType channel, 
-                     ParityType parity,
-                     SpeedInAirType speedinair, 
-                     TransferModeType transmode, 
-                     WakeUpTimeType wutime);
+void LoraWriteParamter(LoraPar *lp);
 
-void LoraReadParamter(LoraPacket *lp);
+void LoraReadParamter(void);
 
-void LoraModuleDMAInit(LoraPacket *lp);
+void LoraModuleDMAInit(void);
 //reset lora module
 uint8_t Lora_Reset(LoraPacket *lp);
 //send data
-bool LoraTransfer(Device *d, uint8_t flag);
+bool LoraTransfer(uint8_t flag);
 
-void CopyDataFromDMA(void);
-void UartDataProcess(void);
-uint8_t LoraRegister(void);
+
+bool LoraRegister(void);
+
+/*
+*   ÅĞ¶ÏÄ£¿éÊÇ·ñ¿ÕÏĞ
+*/
+bool LoraModuleIsIdle(void);
+
+/*
+*   AUXÒı½ÅÖĞ¶Ï´¦Àíº¯Êı
+*/
+void LoraModuleIsIdleHandler(void);
+
+/*
+*   LoraÄ£¿éËù¶ÔÓ¦µÄ´®¿ÚÊı¾İ½ÓÊÕÍê³ÉÖĞ¶Ï´¦Àí
+*/
+void LoraModuleReceiveHandler(void);
 
 #endif

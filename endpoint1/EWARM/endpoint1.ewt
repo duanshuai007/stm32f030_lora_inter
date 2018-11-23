@@ -194,9 +194,6 @@
       <name>$PROJ_DIR$\..\Src\Lora.c</name>
     </file>
     <file>
-      <name>$PROJ_DIR$\..\Src\lora_datapool.c</name>
-    </file>
-    <file>
       <name>$PROJ_DIR$\..\Src\lowpower.c</name>
     </file>
     <file>

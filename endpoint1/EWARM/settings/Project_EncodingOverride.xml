@@ -7,7 +7,7 @@
   </override>
   <override>
     <path>C:\Users\Administrator\Personal\lora\endpoint1\Inc\Lora.h</path>
-    <encoding>UTF-8</encoding>
+    <encoding>GB2312</encoding>
   </override>
   <override>
     <path>C:\Users\Administrator\Personal\lora\endpoint1\Inc\hardware.h</path>
