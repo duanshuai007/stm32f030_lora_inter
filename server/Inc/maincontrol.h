@@ -30,7 +30,7 @@ typedef enum
   //Normal
   NORMAL_SUCCESS            = 101,
   NORMAL_DOWN               = 102,
-  NORMAL_FORWARD            = 103,    
+  NORMAL_FORWARD            = 103,
   NORMAL_UP                 = 104,
   NORMAL_BACK               = 105,
   NORMAL_BUSY               = 106,
