@@ -188,6 +188,9 @@
       <name>$PROJ_DIR$\..\Src\crc16.c</name>
     </file>
     <file>
+      <name>$PROJ_DIR$\..\Src\flash.c</name>
+    </file>
+    <file>
       <name>$PROJ_DIR$\..\Src\hardware.c</name>
     </file>
     <file>

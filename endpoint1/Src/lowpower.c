@@ -1,11 +1,6 @@
 #include "lowpower.h"
 #include "stdint.h"
 #include "stm32f0xx.h"
-
-#include "stm32f0xx_hal_def.h"
-#include "stm32f0xx_hal_gpio.h"
-#include "stm32f0xx_hal_pwr.h"
-
 #include "lora.h"
 #include "user_config.h"
 #include "hardware.h"
@@ -389,8 +384,12 @@ bool ExecCMD(void)
           gDevice.u8Resp = 0;
           gDevice.u8CmdRunning = CMD_STOP;
           gDevice.u8CmdDone = 0;
-        } else if ( ret == MOTOR_ERROR ) {
-          gDevice.u8Resp = MOTOR_CANTUP;
+        } else if (( ret == MOTOR_ERROR) || (ret == MOTOR_ERROR_ULTRA)) {
+          if (ret == MOTOR_ERROR)
+            gDevice.u8Resp = MOTOR_CANTUP;
+          else if (ret == MOTOR_ERROR_ULTRA)
+            gDevice.u8Resp = MOTOR_CANTUP_ULTRA;
+          
           LoraTransfer(NORMALCMD);
           gDevice.u8Cmd = HW_CMD_NONE;
           gDevice.u8Resp = 0;

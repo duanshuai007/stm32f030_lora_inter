@@ -1,11 +1,6 @@
 #include "motor.h"
 #include "hardware.h"
 #include "stm32f0xx.h"
-#include "stm32f0xx_hal.h"
-#include "stm32f0xx_hal_def.h"
-#include "stm32f0xx_hal_gpio.h"
-#include "stm32f0xx_hal_tim.h"
-
 #include "rtc.h"
 #include "user_config.h"
 #include "Lora.h"
@@ -187,9 +182,12 @@ static uint16_t get_distance(void)
 
 MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd) 
 {
-  uint8_t retry= 0;
+#define ULTRASONIC_CHECK_MAX_TIMES    5
+#define ULTRASONIC_MIN_SAFE_DISTANCE  1000
+//  uint8_t retry= 0;
+//  uint8_t error_retry = 0;
   uint16_t dat = 0;
-  uint16_t ret;
+//  uint16_t ret;
   //电机当前忙
   if(motor.action != MOTOR_CMD_IDLE)
     return MOTOR_RUNNING;
@@ -206,18 +204,28 @@ MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd)
     }
     //判断地锁上是否有障碍物，地锁能不能抬起
     //重复读取五次的测量值，多次测量能避免错误
-    while(retry < 5) {
-      ret = get_distance();
-      if (ret != 0xffff) {
-        dat += ret;
-        retry++;
-      }
-      HAL_Delay(100);
-    }
-    
-    dat /= 5;
+//    while(retry < ULTRASONIC_CHECK_MAX_TIMES) {
+//      ret = get_distance();
+//      if (ret != 0xffff) {
+//        error_retry = 0;
+//        dat += ret;
+//        retry++;
+//      } else {
+//        //如果超声波坏了，不能读取数据的话
+//        error_retry++;
+//        if(error_retry > 10) {
+//          return MOTOR_ERROR_ULTRA;
+//        }
+//      }
+//      HAL_Delay(100);
+//    }
+//    dat /= ULTRASONIC_CHECK_MAX_TIMES;
+    HAL_Delay(500);
+    dat = get_distance();
+    if ( 0xffff == dat )
+      return MOTOR_ERROR_ULTRA;
     //单位:毫米
-    if ( dat < 400 ) {
+    if ( dat < ULTRASONIC_MIN_SAFE_DISTANCE ) {
       //小于安全距离就认为车位有车，不抬杠
       return MOTOR_ERROR;
     }

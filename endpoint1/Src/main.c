@@ -49,6 +49,7 @@
 #include "lowpower.h"
 #include "rtc.h"
 #include "lora_datapool.h"
+#include "flash.h"
 #include "user_config.h"
 /* USER CODE END Includes */
 
@@ -100,6 +101,9 @@ int main(void)
   bool mode = false;
   //flag 表示本次唤醒过程是否由地锁的异常动作唤醒
   bool flag = false;
+  
+  uint16_t serverID, localID;
+  uint8_t sendCH, recvCH;
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -131,13 +135,17 @@ int main(void)
   motor_input_pin_off_interrupt(true);
   LoraModuleInit();
   
+  if (FLASH_Init(&serverID, &localID, &sendCH, &recvCH) == false) {
+    return -1;
+  }
+  
   //低功耗模式下调试延时，如果不加很难再次刷程序
   HAL_Delay(5000);
   
   LoraPar lp;
-  lp.u16Addr = 33;
+  lp.u16Addr = localID;
   lp.u8Baud = BAUD_57600;
-  lp.u8Channel = CHAN_440MHZ;
+  lp.u8Channel = recvCH;
   lp.u8FEC = FEC_ENABLE;
   lp.u8IOMode = IOMODE_PP;
   lp.u8Parity = PARITY_8O1;
@@ -148,6 +156,8 @@ int main(void)
   LoraWriteParamter( &lp );
   
   LoraReadParamter();
+  
+  SetServer(serverID, sendCH);
   
   CloseNotUsedPeriphClock();
   //串口重初始化
@@ -552,7 +562,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : PB14 */
   GPIO_InitStruct.Pin = GPIO_PIN_14;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 

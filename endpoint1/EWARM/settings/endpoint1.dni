@@ -14,7 +14,7 @@ Watch0=_ 0 "" 0 "" 0 "" 0 "" 0 0 0 0
 Watch1=_ 0 "" 0 "" 0 "" 0 "" 0 0 0 0
 CStepIntDis=_ 0
 [DebugChecksum]
-Checksum=-179750307
+Checksum=-513262343
 [Exceptions]
 StopOnUncaught=_ 0
 StopOnThrow=_ 0
@@ -47,20 +47,19 @@ Fmt1=Device-u8CmdDone	3	0
 Fmt2=Device-u8CmdRunning	4	0
 Fmt3=Device-u8Resp	3	0
 Fmt4=LoraPacket-mode	3	0
-Fmt5=LoraPacket-pos	3	0
-Fmt6=LoraPar-u16Addr	4	0
-Fmt7=LoraPar-u8Baud	4	0
-Fmt8=LoraPar-u8Channel	4	0
-Fmt9=LoraPar-u8FEC	4	0
-Fmt10=LoraPar-u8IOMode	4	0
-Fmt11=LoraPar-u8Parity	4	0
-Fmt12=LoraPar-u8SendDB	4	0
-Fmt13=LoraPar-u8Speedinair	4	0
-Fmt14=LoraPar-u8TranferMode	4	0
-Fmt15=LoraPar-u8WakeUpTime	4	0
-Fmt16=UART_InitTypeDef-Parity	4	0
-Fmt17=USART_TypeDef-CR1	4	0
-Fmt18=USART_TypeDef-ISR	4	0
+Fmt5=LoraPar-u16Addr	4	0
+Fmt6=LoraPar-u8Baud	4	0
+Fmt7=LoraPar-u8Channel	4	0
+Fmt8=LoraPar-u8FEC	4	0
+Fmt9=LoraPar-u8IOMode	4	0
+Fmt10=LoraPar-u8Parity	4	0
+Fmt11=LoraPar-u8SendDB	4	0
+Fmt12=LoraPar-u8Speedinair	4	0
+Fmt13=LoraPar-u8TranferMode	4	0
+Fmt14=LoraPar-u8WakeUpTime	4	0
+Fmt15=UART_InitTypeDef-Parity	4	0
+Fmt16=USART_TypeDef-CR1	4	0
+Fmt17=USART_TypeDef-ISR	4	0
 [array_types]
 Fmt0=uint32_t[3]	4	0
 Fmt1=uint8_t[128]	4	0
@@ -72,17 +71,17 @@ Fmt6=uint8_t[5]	4	0
 Fmt7=uint8_t[64]	4	0
 Fmt8=uint8_t[6]	4	0
 [watch_formats]
-Fmt0={W}1:gCrc	4	0
-Fmt1={W}1:len	3	0
-Fmt2={W}1:pos	3	0
-Fmt3={W}1:rec_data	4	0
-Fmt4={W}42:battery	3	0
-Fmt5={W}42:count	3	0
-Fmt6={W}42:gCPUID	4	0
-Fmt7={W}42:gID	4	0
-[Trace2]
-Enabled=0
-ShowSource=0
+Fmt0={W}1:ch	4	0
+Fmt1={W}1:gCrc	4	0
+Fmt2={W}1:len	3	0
+Fmt3={W}1:localid	4	0
+Fmt4={W}1:pos	3	0
+Fmt5={W}1:rec_data	4	0
+Fmt6={W}1:serverid	4	0
+Fmt7={W}42:battery	3	0
+Fmt8={W}42:count	3	0
+Fmt9={W}42:gCPUID	4	0
+Fmt10={W}42:gID	4	0
 [SWOTraceWindow]
 PcSampling=0
 InterruptLogs=0
@@ -121,12 +120,6 @@ GraphEnabled=0
 ShowTimeLog=1
 ShowTimeSum=1
 SumSortOrder=0
-[Disassemble mode]
-mode=0
-[Breakpoints2]
-Bp0=_ 0 "EMUL_DATA" "UART_EndTransmit_IT" 0 0 0 0 4294967295
-Bp1=_ 0 "EMUL_CODE" "{$PROJ_DIR$\..\Src\main.c}.601.1" 0 0 1 "" 0 "" 0
-Count=2
 [Log file]
 LoggingEnabled=_ 0
 LogFile=_ ""
@@ -134,10 +127,6 @@ Category=_ 0
 [TermIOLog]
 LoggingEnabled=_ 0
 LogFile=_ ""
-[Aliases]
-A0=_ "Z:\обть\Lora\endpoint1\Src\main.c" ""
-Count=1
-SuppressDialog=1
 [CallStackLog]
 Enabled=0
 [PowerProbe]
@@ -150,3 +139,13 @@ Mode=3
 Graph=0
 Symbiont=0
 Exclusions=
+[Disassemble mode]
+mode=0
+[Breakpoints2]
+Bp0=_ 0 "EMUL_DATA" "UART_EndTransmit_IT" 0 0 0 0 4294967295
+Bp1=_ 0 "EMUL_CODE" "{$PROJ_DIR$\..\Src\main.c}.611.1" 0 0 1 "" 0 "" 0
+Count=2
+[Aliases]
+A0=_ "Z:\обть\Lora\endpoint1\Src\main.c" ""
+Count=1
+SuppressDialog=1

@@ -3,7 +3,6 @@
 
 #include "stdint.h"
 #include "stm32f0xx.h"
-#include "stm32f0xx_hal_def.h"
 #include "lora_paramter.h"
 
 #define DEBUG
@@ -27,9 +26,6 @@ enum {
 
 //必须根据地锁版本来进行配置
 #define MODE_OLD
-
-//重要，设置目标的id，必须配置为目标lora模块的地址
-#define TARGET_ID      50
 
 #pragma pack(1)
 typedef struct {

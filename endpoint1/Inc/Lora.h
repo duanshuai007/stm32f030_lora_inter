@@ -35,7 +35,7 @@ typedef struct {
     uint8_t u8SendDB;           //0-1bit
 } LoraPar;
 
-//节点resp结构体
+//节点resp结构体 s:13+3
 typedef struct {
   uint8_t   u8Head;
   uint8_t   u8Len;
@@ -47,7 +47,7 @@ typedef struct {
   uint8_t   u8Tail;
 } RespDataPacket;
 
-//服务器cmd结构体
+//服务器cmd结构体 r:12
 typedef struct {
   uint8_t   u8Head;
   uint8_t   u8Len;
@@ -59,9 +59,11 @@ typedef struct {
 } CmdDataPacket;
 
 typedef struct {
-    volatile bool     isIdle; //IDLE FLAG
+//    volatile bool     isIdle; //IDLE FLAG
   
     Lora_Mode mode;   //work mode
+    uint16_t  u16ServerID;
+    uint8_t   u8ServerCH;
     LoraPar   paramter;
 
     uint8_t   dma_sbuff_size;
@@ -76,6 +78,7 @@ typedef struct {
 
 void LoraModuleInit(void);
 
+void SetServer(uint16_t serverid, uint8_t ch);
 //When setting or reading parameters, the serial port must be no parity.
 void LoraWriteParamter(LoraPar *lp);
 
@@ -87,7 +90,7 @@ uint8_t Lora_Reset(LoraPacket *lp);
 //send data
 bool LoraTransfer(uint8_t flag);
 
-
+//
 bool LoraRegister(void);
 
 /*
@@ -98,7 +101,7 @@ bool LoraModuleIsIdle(void);
 /*
 *   AUX引脚中断处理函数
 */
-void LoraModuleIsIdleHandler(void);
+//void LoraModuleIsIdleHandler(void);
 
 /*
 *   Lora模块所对应的串口数据接收完成中断处理

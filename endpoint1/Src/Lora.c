@@ -1,13 +1,10 @@
 #include "Lora.h"
 #include "stdint.h"
 #include "stm32f0xx.h"
-#include "stm32f0xx_hal.h"
 #include "crc16.h"
-#include "crc_stm32f0.h"
 #include "hardware.h"
 #include "user_config.h"
 #include "lora_paramter.h"
-//#include "lora_datapool.h"
 #include "string.h"
 
 extern UART_HandleTypeDef huart1;
@@ -28,6 +25,12 @@ void LoraModuleInit(void)
   
   gLoraPacket.dma_sbuff = &uart1_dma_sbuff[0];
   gLoraPacket.dma_sbuff_size = SERVER_REC_RESP_LEN;
+}
+
+void SetServer(uint16_t serverid, uint8_t ch)
+{
+  gLoraPacket.u16ServerID = serverid;
+  gLoraPacket.u8ServerCH = ch;
 }
 
 static bool set_loramodule_workmode(Lora_Mode lm)
@@ -80,7 +83,6 @@ static bool set_loramodule_workmode(Lora_Mode lm)
 */
 static bool loramodule_generate_paramter(uint8_t *buff, SaveType st)
 {
-  
   if (SAVE_IN_FLASH == st) {
     buff[0] = 0xC0;
   } else {
@@ -365,7 +367,11 @@ static void uart_set_baud_parity(UART_HandleTypeDef *huart, BaudType baud, Parit
 */
 bool LoraModuleIsIdle(void)
 {
-  return gLoraPacket.isIdle;
+//  return gLoraPacket.isIdle;
+  if ( HAL_GPIO_ReadPin(GPIO_Lora_AUX, GPIO_Lora_AUX_Pin) == GPIO_PIN_SET )
+    return true;
+  else
+    return false;
 }
 
 void LoraModuleDMAInit(void)
@@ -430,9 +436,11 @@ bool LoraTransfer(uint8_t flag)
     set_loramodule_workmode(LoraMode_Normal);
   }
   
-  gLoraPacket.dma_sbuff[0] = (uint8_t)((TARGET_ID & 0xff00) >> 8);
-  gLoraPacket.dma_sbuff[1] = (uint8_t)(TARGET_ID & 0x00ff);
-  gLoraPacket.dma_sbuff[2] = gLoraPacket.paramter.u8Channel;
+//  gLoraPacket.dma_sbuff[0] = (uint8_t)((TARGET_ID & 0xff00) >> 8);
+//  gLoraPacket.dma_sbuff[1] = (uint8_t)(TARGET_ID & 0x00ff);
+  gLoraPacket.dma_sbuff[0] = (uint8_t)((gLoraPacket.u16ServerID & 0xff00) >> 8);
+  gLoraPacket.dma_sbuff[1] = (uint8_t)(gLoraPacket.u16ServerID & 0x00ff);
+  gLoraPacket.dma_sbuff[2] = gLoraPacket.u8ServerCH;
   
   RespDataPacket *ptr = (RespDataPacket *)(gLoraPacket.dma_sbuff + 3);
   ptr->u8Head = LORA_MSG_HEAD;
@@ -466,6 +474,7 @@ bool LoraRegister(void)
 #define LORA_MAX_IDLE_WAIT      200
 #define UART_MAX_SEND_WAIT      200
   
+  bool ret = false;
   uint8_t delay = 0;
   uint8_t buffer[12] = {0};
   
@@ -483,9 +492,11 @@ bool LoraRegister(void)
     set_loramodule_workmode(LoraMode_Normal);
   }
   
-  gLoraPacket.dma_sbuff[0] = (uint8_t)((TARGET_ID & 0xff00) >> 8);
-  gLoraPacket.dma_sbuff[1] = (uint8_t)(TARGET_ID & 0x00ff);
-  gLoraPacket.dma_sbuff[2] = gLoraPacket.paramter.u8Channel;
+//  gLoraPacket.dma_sbuff[0] = (uint8_t)((TARGET_ID & 0xff00) >> 8);
+//  gLoraPacket.dma_sbuff[1] = (uint8_t)(TARGET_ID & 0x00ff);
+  gLoraPacket.dma_sbuff[0] = (uint8_t)((gLoraPacket.u16ServerID & 0xff00) >> 8);
+  gLoraPacket.dma_sbuff[1] = (uint8_t)(gLoraPacket.u16ServerID & 0x00ff);
+  gLoraPacket.dma_sbuff[2] = gLoraPacket.u8ServerCH;
 
   RespDataPacket *ptr = (RespDataPacket *)(gLoraPacket.dma_sbuff + 3);
   ptr->u8Head = LORA_MSG_HEAD;
@@ -502,9 +513,11 @@ bool LoraRegister(void)
     
       CmdDataPacket *cmd = (CmdDataPacket *)buffer;
       if(cmd->u8Cmd == HW_DEVICE_ONLINE)
-        return true;
+//        return true;
+        ret = true;
       else
-        return false;
+        ret = false;
+//        return false;
     }
   }
   
@@ -514,19 +527,19 @@ bool LoraRegister(void)
   
   set_loramodule_workmode(LoraMode_LowPower);
   
-  return false;
+  return ret;
 }
 
 /**
 *   AUX引脚中断处理函数，判断lora是否是空闲状态
 */
-void LoraModuleIsIdleHandler(void)
-{
-  if ( HAL_GPIO_ReadPin(GPIO_Lora_AUX, GPIO_Lora_AUX_Pin) == GPIO_PIN_SET )
-    gLoraPacket.isIdle = true;
-  else
-    gLoraPacket.isIdle = false;
-}
+//void LoraModuleIsIdleHandler(void)
+//{
+////  if ( HAL_GPIO_ReadPin(GPIO_Lora_AUX, GPIO_Lora_AUX_Pin) == GPIO_PIN_SET )
+////    gLoraPacket.isIdle = true;
+////  else
+////    gLoraPacket.isIdle = false;
+//}
 
 /**
 *   Lora模块接收数据处理

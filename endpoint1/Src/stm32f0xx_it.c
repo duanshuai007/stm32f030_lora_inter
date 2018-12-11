@@ -244,7 +244,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   if(GPIO_Lora_AUX_Pin == GPIO_Pin)
   {   //AUX interrupt
-    LoraModuleIsIdleHandler();
+    //仅仅用来唤醒cpu，不做其他动作
+//    LoraModuleIsIdleHandler();
   } else {
     //gpio回调函数
     if ( motor.gpio_cb ) {
