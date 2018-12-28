@@ -1,7 +1,6 @@
 #include "crc16.h"
 #include "stdint.h"
 #include "stm32f1xx.h"
-#include "stm32f1xx_hal_def.h"
 
 static void InvertUint8(uint8_t *dBuf,uint8_t *srcBuf)
 {

@@ -14,24 +14,25 @@
 #define CMD_STATUS_STOP       103   //超时停止运行
 #define CMD_STATUS_STANDBY    104   //有新指令，等待运行
 
-
+#pragma pack(1)
 typedef struct DeviceNode {
   uint32_t u32Identify;     //指令identify
   uint32_t u32Time;         //超时计时：1:心跳时间，2:指令执行超时
   
   uint16_t u16ID;           //设备ID
-  uint8_t u8CHAN;           //信道
   uint8_t u8CMD;            //设备的指令  
-  
   uint8_t u8CMDSTATUS;      //指令执行状态
   uint8_t u8RESP;           //地锁的响应
-  uint8_t u8CMDRetry;       //cmd没有影响重试的次数
+  uint8_t u8CMDRetry;       //cmd重试的次数
+  
+  bool DeviceOnLine;        //设备在线状态
 } DeviceNode;
 
 typedef struct List {
   struct List *next;
   struct DeviceNode *Device;
 } List;
+#pragma pack()
 
 /*
 *   链表初始化

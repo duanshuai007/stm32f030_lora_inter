@@ -9,6 +9,7 @@ Motor motor;
 
 extern Device gDevice;
 //extern TIM_HandleTypeDef htim6;
+extern UART_HandleTypeDef huart2;
 
 extern uint8_t uart2_dma_rbuff[4];
 
@@ -169,7 +170,31 @@ static void motor_ctrl_cb(MOTOR_CB_TYPE m)
 */
 static uint16_t get_distance(void)
 {
-  UltraSonicType *ust = (UltraSonicType *)uart2_dma_rbuff;
+//  UltraSonicType *ust = (UltraSonicType *)uart2_dma_rbuff;
+//  if ( ust->head == 0xff ) {
+//    if ((( ust->head + ust->data_h + ust->data_l ) & 0xff) == ust->sum) {
+//      return (((uint16_t)ust->data_h) << 8 | ust->data_l);
+//    }
+//  }
+  
+  uint8_t i, pos;
+  uint8_t buffer[4] = {0};
+  buffer[0] = 0xff;
+  
+  for(i=0;i<4;i++) {
+    if ( uart2_dma_rbuff[i] == 0xff ) {
+      pos = i;
+    }
+  }
+  
+  for(i=0;i<4;i++) {
+    buffer[i] = uart2_dma_rbuff[pos];
+    pos++;
+    if(pos == 4) 
+      pos = 0;
+  }
+  
+  UltraSonicType *ust = (UltraSonicType *)buffer;
   if ( ust->head == 0xff ) {
     if ((( ust->head + ust->data_h + ust->data_l ) & 0xff) == ust->sum) {
       return (((uint16_t)ust->data_h) << 8 | ust->data_l);
@@ -182,8 +207,8 @@ static uint16_t get_distance(void)
 
 MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd) 
 {
-#define ULTRASONIC_CHECK_MAX_TIMES    5
-#define ULTRASONIC_MIN_SAFE_DISTANCE  1000
+//#define ULTRASONIC_CHECK_MAX_TIMES    5
+#define ULTRASONIC_MIN_SAFE_DISTANCE  400
 //  uint8_t retry= 0;
 //  uint8_t error_retry = 0;
   uint16_t dat = 0;
@@ -220,8 +245,16 @@ MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd)
 //      HAL_Delay(100);
 //    }
 //    dat /= ULTRASONIC_CHECK_MAX_TIMES;
-    HAL_Delay(500);
+    //使能超声波电源
+    HAL_GPIO_WritePin(GPIO_ULTRASONIC, GPIO_ULTRASONIC_PIN, GPIO_PIN_RESET);
+    HAL_UART_Receive_DMA(&huart2, uart2_dma_rbuff, 4);
+    //使能空闲中断，仅对接收起作用
+    __HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
+  
+    HAL_Delay(1000);
     dat = get_distance();
+    //禁止超声波电源
+    HAL_GPIO_WritePin(GPIO_ULTRASONIC, GPIO_ULTRASONIC_PIN, GPIO_PIN_SET);
     if ( 0xffff == dat )
       return MOTOR_ERROR_ULTRA;
     //单位:毫米

@@ -3,19 +3,6 @@
 #include "stdlib.h"
 #include "lora.h"
 
-/*
-*   FLASH内保存设备的密钥信息
-*   密钥以加密方式保存在FLASH被
-*   需要用tea解密方式进行解密
-*   
-*   [head]    [message]
-*   AABBCDDC  .......
-*
-*   [   m   e  s   s   a   g   e   ]
-*   [title][加密内容]
-*   对加密内容解密后，需要根据title对解密后的内容yyyyyyyyyyyyyyyyyyyyyyyy
-*   进行摘除，最后得到实际的密钥
-*/
 
 static void strtohex(uint16_t *dst, uint32_t *src, uint8_t srclen)
 {

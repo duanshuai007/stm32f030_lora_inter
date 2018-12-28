@@ -69,5 +69,8 @@ typedef struct {
 //PA6 方向输出，电机位置传感器发送使能信号K3
 #define GPIO_SENSOR_SWITCH              GPIOA
 #define GPIO_SENSOR_SWITCH_PIN          GPIO_PIN_6
+//PB13 超声波使能引脚
+#define GPIO_ULTRASONIC                 GPIOB
+#define GPIO_ULTRASONIC_PIN             GPIO_PIN_13
 
 #endif

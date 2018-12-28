@@ -5,6 +5,7 @@
 
 uint32_t GetRTCTime(void);
 uint16_t GetRTCTimeMinAndSec(void);
+void RTCTask(void);
 
 #endif
 

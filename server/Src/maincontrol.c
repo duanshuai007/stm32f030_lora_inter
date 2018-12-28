@@ -1,7 +1,6 @@
 #include "maincontrol.h"
 #include "stdint.h"
 #include "stm32f1xx.h"
-#include "stm32f1xx_hal.h"
 #include "user_config.h"
 #include "stdlib.h"
 #include "crc16.h"
@@ -22,7 +21,7 @@ void UARTF405_Init(UART_HandleTypeDef *uart)
 {
   gUartMx = (UartModule *)malloc(sizeof(UartModule));
   if(gUartMx == NULL) {
-    PRINT("gUartMx == NULL\r\n");
+    DEBUG_ERROR("gUartMx == NULL\r\n");
     return;
   }
   
@@ -40,14 +39,14 @@ void UARTF405_Init(UART_HandleTypeDef *uart)
   
   gUartMx->rxDataPool = DataPoolInit(UART2_RX_DATAPOOL_SIZE);
   if ( gUartMx->rxDataPool == NULL ) {
-    PRINT("uart2 rxdatapool null\r\n");
+    DEBUG_ERROR("uart2 rxdatapool null\r\n");
     free(gUartMx);
     return;
   }
   
   gUartMx->txDataPool = DataPoolInit(UART2_TX_DATAPOOL_SIZE);
   if ( gUartMx->txDataPool == NULL ) {
-    PRINT("uart2 txdatapool null\r\n");
+    DEBUG_ERROR("uart2 txdatapool null\r\n");
     free(gUartMx->rxDataPool);
     free(gUartMx);
     return;
@@ -65,7 +64,7 @@ static bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
 {
   if(NULL == pdev || NULL == pRespInfo)
   {
-    PRINT("generalRespInfo failed : pdev = %p, pRespInfo = %p\n", pdev, pRespInfo);
+    DEBUG_ERROR("generalRespInfo failed : pdev = %p, pRespInfo = %p\n", pdev, pRespInfo);
     return false;
   }
   
@@ -96,8 +95,14 @@ static bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
     case 99:
       pRespInfo->resp_code = NORMAL_MOTOR_RUNNING;
       break;
+    case 100:   //超声波检测到障碍物，不执行抬起操作
+      pRespInfo->resp_code = NORMAL_BUSY;
+      break;
+    case 101:   //超声波的串口不能接收到正确格式数据，不执行抬起操作
+      pRespInfo->resp_code = NORMAL_BUSY;
+      break;
     default:
-      PRINT("generalRespInfo error : pdev->u8CMD = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);
+      DEBUG_ERROR("generalRespInfo error : pdev->u8CMD = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);
       return false;
     }
     
@@ -122,7 +127,7 @@ static bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
       pRespInfo->resp_code = NORMAL_BUSY;
       break;
     default:
-      PRINT("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
+      DEBUG_ERROR("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
       return false;
     }
     
@@ -138,7 +143,7 @@ static bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
       pRespInfo->resp_code = NORMAL_BEEP_OPEN_FAILED;
       break;
     default:
-      PRINT("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
+      DEBUG_ERROR("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
       return false;
     }
     pRespInfo->resp_data.identity = pdev->u32Identify;
@@ -154,7 +159,7 @@ static bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
       pRespInfo->resp_code = NORMAL_BEEP_CLOSE_FAILED;
       break;
     default:
-      PRINT("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
+      DEBUG_ERROR("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
       return false;
     }
     pRespInfo->resp_data.identity = pdev->u32Identify;
@@ -170,7 +175,7 @@ static bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
       pRespInfo->resp_code = NORMAL_BEEP_STATUS_CLOSED;
       break;
     default:
-      PRINT("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
+      DEBUG_ERROR("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
       return false;
     }
     
@@ -180,7 +185,7 @@ static bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
   case CMD_ADC_GET:
 //    if(pdev->u8RESP > 100)
 //    {
-//      PRINT("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
+//      DEBUG_ERROR("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
 //      return false;        
 //    }
 //    
@@ -204,14 +209,14 @@ static bool generalRespInfo(DeviceNode *pdev, T_Resp_Info *pRespInfo)
       pRespInfo->resp_code = INTERUPT_BACK;
       break;
     default:
-      PRINT("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
+      DEBUG_ERROR("generalRespInfo error : pdev->u8Cmd = %d, pdev->u8Resp = %d\n", pdev->u8CMD, pdev->u8RESP);          
       return false;
     }
     pRespInfo->resp_data.endpointId = pdev->u16ID;
     break;
     
   default:
-    PRINT("generalRespInfo error : pdev->u8Cmd = %d\n", pdev->u8CMD);          
+    DEBUG_ERROR("generalRespInfo error : pdev->u8Cmd = %d\n", pdev->u8CMD);          
     return false;
   } /* end switch(pdev->u8CMD)*/
   
@@ -308,11 +313,11 @@ void F405Task(void)
     uint8_t crc = crc8_chk_value((uint8_t *)(&cmd), 7);
     
     if(crc != cmd.crc) {
-      PRINT("receive cmd for F405 error: crc check error, crc = %02x, cmd.crc = %02x\r\n", crc, cmd.crc);
+      DEBUG_ERROR("receive cmd for F405 error: crc check error, crc = %02x, cmd.crc = %02x\r\n", crc, cmd.crc);
       return;
     }
     
-    PRINT("rec from F405:id:%04x, cmd:%d, identify:%08x\r\n",
+    DEBUG_INFO("rec from F405:id:%04x, cmd:%d, identify:%08x\r\n",
            cmd.endpointId,cmd.action,cmd.identity);
     
     if ( CMD_GET_ALL_NODE == cmd.action ) {
@@ -321,7 +326,8 @@ void F405Task(void)
     } else {
       if (SendCMDToList(cmd.endpointId, cmd.action, cmd.identity)  != true) {
         //send device not exist msg to f405
-        UartSendMSGToF405(NODE_NOTEXIST, cmd.endpointId, 0);
+        //所有的设备都是存在，不会出现不存在的设备的情况
+//        UartSendMSGToF405(NODE_NOTEXIST, cmd.endpointId, 0);
       }
     }
   }
@@ -329,7 +335,7 @@ void F405Task(void)
   //F405发送数据处理
   if ( gUartMx->uart->gState == HAL_UART_STATE_READY ) {
     if ( DataPoolGetNumByte(tdp, gUartMx->dma_sbuff, sizeof(T_Resp_Info))) {
-      PRINT("send resp to f405, resp=%d\r\n",gUartMx->dma_sbuff[0]);
+      DEBUG_INFO("send resp to f405, resp=%d\r\n",gUartMx->dma_sbuff[0]);
       HAL_UART_Transmit_DMA(gUartMx->uart, gUartMx->dma_sbuff, sizeof(T_Resp_Info));
     }
   }

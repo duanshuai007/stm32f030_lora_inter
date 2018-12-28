@@ -44,6 +44,8 @@
 #include "Lora.h"
 #include "maincontrol.h"
 #include "flash.h"
+#include "rtc.h"
+#include "user_config.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -91,7 +93,8 @@ static void MX_TIM4_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+  uint16_t serverID;
+  uint8_t send_channel, recv_channel;
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -122,17 +125,20 @@ int main(void)
   //设备链表初始化
   ListInit();
   //flash内保存的链表初始化
-  FLASH_Init();
+  if (FLASH_Init(&serverID, &send_channel, &recv_channel) == false) {
+    return -1;
+  }
   //与f405通信串口初始化
   UARTF405_Init(&huart2);
   //lora模块gpio引脚设置
   LoraModuleGPIOInit(&huart3);
   LoraModuleGPIOInit(&huart1);
   //lora模块参数配置
+  //send
   LoraPar lp;
-  lp.u16Addr = 1021;
+  lp.u16Addr = 0xfffe;
   lp.u8Baud = BAUD_115200;
-  lp.u8Channel = CHAN_430MHZ;
+  lp.u8Channel = send_channel;
   lp.u8FEC = FEC_ENABLE;
   lp.u8IOMode = IOMODE_PP;
   lp.u8Parity = PARITY_8O1;
@@ -143,9 +149,10 @@ int main(void)
   SetLoraParamter( &huart3, &lp);
   ReadLoraParamter( &huart3 );
   
-  lp.u16Addr = 25;
+  //recv
+  lp.u16Addr = serverID;
   lp.u8Baud = BAUD_115200;
-  lp.u8Channel = CHAN_440MHZ;
+  lp.u8Channel = recv_channel;
   lp.u8FEC = FEC_ENABLE;
   lp.u8IOMode = IOMODE_PP;
   lp.u8Parity = PARITY_8O1;
@@ -163,21 +170,22 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  PRINT("start while\r\n");
+  DEBUG_INFO("start while\r\n");
+
   //使能定时器4
   HAL_TIM_Base_Start_IT(&htim4);
   
   while (1)
   {
-
+    
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-
-      LoraModuleTask();
-      F405Task();
-      ListTask();
-      FlashTask();
+    RTCTask();
+    LoraModuleTask();
+    F405Task();
+    ListTask();
+    FlashTask();
   }
   /* USER CODE END 3 */
 
@@ -427,8 +435,8 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : AUX_R_Pin AUX_S_Pin */
   GPIO_InitStruct.Pin = AUX_R_Pin|AUX_S_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : M1_R_Pin M0_R_Pin */

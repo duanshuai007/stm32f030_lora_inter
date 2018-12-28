@@ -53,6 +53,7 @@ static void gpio_used_lp_init(void)
   set_gpio( GPIO_BEEP, GPIO_BEEP_Pin, GPIO_MODE_OUTPUT_PP);
   set_gpio( GPIO_Lora_M1, GPIO_Lora_M1_Pin, GPIO_MODE_OUTPUT_PP);
   set_gpio( GPIO_Lora_AUX, GPIO_Lora_AUX_Pin, GPIO_MODE_IT_RISING_FALLING);
+//  set_gpio( GPIO_ULTRASONIC, GPIO_ULTRASONIC_PIN, GPIO_MODE_OUTPUT_PP);
 }
 
 //关闭使用的外设
@@ -104,11 +105,12 @@ static void gpio_not_used_lp_init(void)
   
   /*
   *   GPIOB中涉及到的引脚包括
-  *   (P)PB4,(N)PB5,(BEEP)PB10,(AUX)PB14,(M1)PB15
+  *   (P)PB4,(N)PB5,(BEEP)PB10,(AUX)PB14,(M1)PB15, (ULTRASONIC PIN)PB13
   *   PB4,PB5,PB10,PB15都是输出模式
   *   PB14是中断输入
   */
-  GPIO_InitStruct.Pin = (GPIO_PIN_All & (~(GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_10 | GPIO_PIN_14 | GPIO_PIN_15)));
+  GPIO_InitStruct.Pin = (GPIO_PIN_All 
+                         & (~(GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_10 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15)));
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
@@ -185,10 +187,16 @@ static void periph_used_in_motor_init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
   
-  /*Configure GPIO pins : PB4(P) PB5(N) */
+  /*Configure GPIO pins : PB4(P) PB5(N) PB13(ULTRASONIC)*/
   GPIO_InitStruct.Pin = GPIO_PIN_4 |GPIO_PIN_5;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 }

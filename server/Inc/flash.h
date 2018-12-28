@@ -4,9 +4,10 @@
 #include "stdint.h"
 #include "user_config.h"
 
-#define FLASH_DATABASE_START  0x0800f000
-#define SAVE_MESSAGE_HEAD     0xA5B4C3D2
-#define DEVICE_MAX_NUMBER     200
+#define FLASH_SERVERADDR_START  0x0800f000
+#define FLASH_DATABASE_START    0x0800f030
+#define SAVE_MESSAGE_HEAD       0x474f5246        //"FROG"
+#define DEVICE_MAX_NUMBER       200
 
 /*
 [                 flash                    ]
@@ -17,6 +18,7 @@
 
 #define MSG_SIZE  4
 
+#pragma pack(1)
 typedef struct SaveMSG{
   uint16_t u16DeviceID;   //设备ID
   uint16_t u16LastTime;   //设备最后一次响应的时间
@@ -27,6 +29,7 @@ typedef struct {
   uint8_t u8Total; //总设备数量
   SaveMSG *Head;  //head是链表头，不表示任何设备
 } FLASHDeviceList;
+#pragma pack()
 
 #define READ_FLASH_WORD(addr) (*(volatile uint32_t *)(addr))
 
@@ -34,7 +37,7 @@ typedef struct {
 *   Flashl链表初始化
 *   从存储地区读取已有的设备信息写入flash链表内
 */
-void FLASH_Init(void);
+bool FLASH_Init(uint16_t *sid, uint8_t *sch, uint8_t *rch);
 
 /*
 *   将设备添加到保存列表中

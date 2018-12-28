@@ -127,7 +127,7 @@ typedef struct {
 
 //保存本机lora设备相关信息
 typedef struct {
-  volatile bool  isIdle; //IDLE FLAG
+//  volatile bool  isIdle; //IDLE FLAG
   Lora_Mode       mode;   //work mode
   LoraPar         paramter;//lora参数结构体
   LoraGPIO        gpio;     //lora gpio结构体
@@ -160,50 +160,56 @@ typedef struct
 #pragma pack()
 
 /*
+*   中断函数，在定时器4中断中调用
 *   Lora模块发送间隔定时器
-*   因为lora模块是工作在唤醒模式，不同的设备id之间需要保留空闲市场才能够
+*   因为lora模块是工作在唤醒模式，不同的设备id之间需要保留空闲时间才能够
 *   保证每一帧数据都添加唤醒码
 */
 void LoraSendTimerHandler(void);
 
 /*
-*   判断lora模块的引脚电平来设置lora的空闲状态
+*   中断函数，在GPIO中断中调用。
+*   判断lora模块(发送模块PA11，接收模块PA4)的引脚电平来设置lora的空闲状态
 */
-void SetLoraModuleIdleFlagHandler(uint16_t pin);
+//void SetLoraModuleIdleFlagHandler(uint16_t pin);
 
 /*
+*   系统初始化后调用
 *   设置lora模块所用到的引脚
 */
 void LoraModuleGPIOInit(UART_HandleTypeDef *huart);
 
 /*
+*   在配置好模块的参数后被调用
 *   设置lora模块的dma，dma接收发送缓冲区，datapool等参数
+*   并使能DMA接收，设置空闲中断
 */
 void LoraModuleDMAInit(UART_HandleTypeDef *huart);
 
 /*
 *   设置Lora模块参数
+*   串口数据使用阻塞方式发送接收，波特率96008n1
 */
 void SetLoraParamter(UART_HandleTypeDef *huart, LoraPar *lp);
 
 /*
 *   读取Lora模块参数
+*   串口数据使用阻塞方式发送接收，波特率96008n1
 */
 void ReadLoraParamter(UART_HandleTypeDef *huart);
 
 /*
 *   向目标设备发送控制命令       
 *   id:目标设备的地址
-*   channel:目标设备所在信道
 *   cmd:  发送给目标设备的命令
 *   identify: 发送给目标设备的命令的唯一识别码
 */
-bool LoraCtrlEndPoint(uint16_t id, uint8_t channel, uint8_t cmd, uint32_t identify);
+bool LoraCtrlEndPoint(uint16_t id, uint8_t cmd, uint32_t identify);
 
 /*
 *   中断函数：当被调用时会将对应的串口DMA缓冲区中的
 *             数据复制到对应串口自己的数据池中。
-*   只有uart1和uart2的空闲中断中会调用。
+*   只有uart1(lora recv)和uart2(f405 recv)的空闲中断中会调用。
 */
 bool CopyDataFromDMAHandler(UART_HandleTypeDef *huart);
 
@@ -215,6 +221,7 @@ void LoraModuleReceiveHandler(UART_HandleTypeDef *huart);
 
 /*
 *   Lora模块的数据处理
+*   在Main的while循环中调用
 */
 void LoraModuleTask(void);
 

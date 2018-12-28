@@ -41,7 +41,11 @@ static LoraModule *get_loramodule_by_uart(UART_HandleTypeDef *uart)
 static bool get_loramodule_idle_flag(UART_HandleTypeDef *uart)
 {
   LoraModule *lm = get_loramodule_by_uart(uart);
-  return lm->isIdle;
+  
+  if (HAL_GPIO_ReadPin(lm->gpio.AUX.GPIOX, lm->gpio.AUX.Pin) == GPIO_PIN_SET)
+    return true;
+  else 
+    return false;
 }
 
 /*
@@ -62,22 +66,22 @@ void LoraSendTimerHandler(void)
 /*
 *   判断lora模块的引脚电平来设置lora的空闲状态
 */
-void SetLoraModuleIdleFlagHandler(uint16_t pin)
-{
-  if ( gLoraMS.gpio.AUX.Pin == pin ) {
-    if ( HAL_GPIO_ReadPin(gLoraMS.gpio.AUX.GPIOX, gLoraMS.gpio.AUX.Pin) == GPIO_PIN_SET ) {
-      gLoraMS.isIdle = true;
-    } else {
-      gLoraMS.isIdle = false;
-    }
-  } else if ( gLoraMR.gpio.AUX.Pin == pin) {
-    if ( HAL_GPIO_ReadPin(gLoraMR.gpio.AUX.GPIOX, gLoraMR.gpio.AUX.Pin) == GPIO_PIN_SET ) {
-      gLoraMR.isIdle = true;
-    } else {
-      gLoraMR.isIdle = false;
-    }
-  }
-}
+//void SetLoraModuleIdleFlagHandler(uint16_t pin)
+//{
+//  if ( gLoraMS.gpio.AUX.Pin == pin ) {
+//    if ( HAL_GPIO_ReadPin(gLoraMS.gpio.AUX.GPIOX, gLoraMS.gpio.AUX.Pin) == GPIO_PIN_SET ) {
+//      gLoraMS.isIdle = true;
+//    } else {
+//      gLoraMS.isIdle = false;
+//    }
+//  } else if ( gLoraMR.gpio.AUX.Pin == pin) {
+//    if ( HAL_GPIO_ReadPin(gLoraMR.gpio.AUX.GPIOX, gLoraMR.gpio.AUX.Pin) == GPIO_PIN_SET ) {
+//      gLoraMR.isIdle = true;
+//    } else {
+//      gLoraMR.isIdle = false;
+//    }
+//  }
+//}
 
 /*
 *   设置Lora模块的工作状态
@@ -192,7 +196,7 @@ void LoraModuleDMAInit(UART_HandleTypeDef *huart)
     
     lm->muart.rxDataPool = DataPoolInit(UART1_RX_DATAPOOL_SIZE);
     if ( lm->muart.rxDataPool == NULL ) {
-      PRINT("uart1 rxdatapool NULL\r\n");
+      DEBUG_ERROR("uart1 rxdatapool NULL\r\n");
     }
     
     lm->muart.txDataPool = NULL;
@@ -216,7 +220,7 @@ void LoraModuleDMAInit(UART_HandleTypeDef *huart)
     lm->muart.rxDataPool = NULL;
     lm->muart.txDataPool = DataPoolInit(UART1_RX_DATAPOOL_SIZE);
     if ( lm->muart.txDataPool == NULL ) {
-      PRINT("uart3 txdatapool NULL\r\n");
+      DEBUG_ERROR("uart3 txdatapool NULL\r\n");
     }
   }
 }
@@ -414,7 +418,7 @@ static bool set_loramodule_paramter(LoraModule *lp)
   if (HAL_UART_Transmit(lp->muart.uart, config, 6, 100) == HAL_OK) {
     memset( config, 0, 6);
     if (HAL_UART_Receive(lp->muart.uart, config, 6, 1000) == HAL_OK) { 
-      PRINT("rec:%02x-%02x-%02x-%02x-%02x-%02x\r\n",
+      DEBUG_INFO("rec:%02x-%02x-%02x-%02x-%02x-%02x\r\n",
              config[0], config[1],config[2],
              config[3],config[4],config[5]);
       return true;
@@ -478,7 +482,7 @@ static bool read_loramodule(uint8_t no, LoraModule *lp)
   
   if (HAL_UART_Transmit(lp->muart.uart, cmd, 3, 100) == HAL_OK) {
     if ( HAL_UART_Receive(lp->muart.uart, buffer, 6, 1000) == HAL_OK ) {
-      PRINT("read:%02x-%02x-%02x-%02x-%02x-%02x\r\n",
+      DEBUG_INFO("read:%02x-%02x-%02x-%02x-%02x-%02x\r\n",
              buffer[0],buffer[1],buffer[2],
              buffer[3],buffer[4],buffer[5]);
       get_loramodule_paramter(&lp->paramter, buffer);
@@ -569,14 +573,14 @@ void ReadLoraParamter(UART_HandleTypeDef *huart)
 *   cmd:  发送给目标设备的命令
 *   identify: 发送给目标设备的命令的唯一识别码
 */
-bool LoraCtrlEndPoint(uint16_t id, uint8_t channel, uint8_t cmd, uint32_t identify)
+bool LoraCtrlEndPoint(uint16_t id, uint8_t cmd, uint32_t identify)
 { 
   LoraModule *lm = &gLoraMS;
   uint8_t buffer[16];
   
   buffer[0] = (uint8_t)((id & 0xff00) >> 8);
   buffer[1] = (uint8_t)(id & 0x00ff);
-  buffer[2] = channel;
+  buffer[2] = gLoraMS.paramter.u8Channel;
   
   CmdDataPacket *ptr = (CmdDataPacket *)&buffer[3];
   ptr->u8Head = LORA_MSG_HEAD;
@@ -693,22 +697,20 @@ void LoraModuleTask(void)
             UartSendMSGToF405(NODE_ONLINE, resp->u16Id, 0);
             //give endpoint resp msg
             //如果发送失败endpoint会收不到响应信息会继续发送注册信息，所以不需要判断返回值
-            LoraCtrlEndPoint(resp->u16Id, DEFAULT_CHANNEL, DEVICE_REGISTER, 0);
-            //保存到flash链表
+            LoraCtrlEndPoint(resp->u16Id, /*lmsend->paramter.u8Channel,*/ DEVICE_REGISTER, 0);
           }
           break;
         case DEVICE_ABNORMAL:
           //异常动作信息
           //如果是异常动作信息，需要设置identify为0
           SendCMDRespToList(resp->u16Id, resp->u8Cmd, 0, resp->u8Resp);
-          //更新设备时间信息
           break;
         default:
           //正常控制指令的响应信息
           SendCMDRespToList(resp->u16Id, resp->u8Cmd, resp->u32Identify, resp->u8Resp);
-          //更新设备时间信息
           break;
         }
+        //保存到flash链表,更新设备时间信息
         FlashAddDeviceToList(resp->u16Id, GetRTCTimeMinAndSec());
       }
     }/*end of if (( LORA_MSG_HEAD == resp->u8Head ) && ( LORA_MSG_TAIL == resp->u8Tail ))*/
@@ -731,6 +733,12 @@ void LoraModuleTask(void)
       //设备空闲了，则从数据池中提取出一条指令长度的信息
       if ( DataPoolGetNumByte(um->txDataPool, um->dma_sbuff, um->dma_sbuff_size)) {
         //通过DMA发送，重新设置时间间隔
+#if 0
+        uint8_t i;
+        for(i=0;i < um->dma_sbuff_size; i++)
+          printf("%02x ", um->dma_sbuff[i]);
+        printf("\r\n");
+#endif   
         HAL_UART_Transmit_DMA(um->uart, um->dma_sbuff, um->dma_sbuff_size);
         lora_send_timer = 1;
       } else {

@@ -25,7 +25,7 @@ void ListInit(void)
 {
   gList = (List *)malloc(sizeof(List));
   if ( NULL == gList ) {
-    PRINT("gList == null\r\n");
+    DEBUG_ERROR("gList == null\r\n");
     return;
   }
   
@@ -42,7 +42,7 @@ bool AddDeviceToList(uint16_t id)
   List *last = gList;
   List *pre = gList;
   
-  PRINT("List:add new device[%d]\r\n", id);
+  DEBUG_INFO("List:add new device[%d]\r\n", id);
   
   //首先判断要加入到设备id是否已经在链表内
   while(last)
@@ -50,6 +50,10 @@ bool AddDeviceToList(uint16_t id)
     if(last) {
       if(last->Device){
         if(last->Device->u16ID == id) {
+          last->Device->u8CMDSTATUS = CMD_STATUS_IDLE;
+          last->Device->u8CMDRetry = 0;
+          last->Device->DeviceOnLine = true;
+          last->Device->u32Time = GetRTCTime();
           return true;
         }
       }
@@ -62,13 +66,13 @@ bool AddDeviceToList(uint16_t id)
   //创建新的链表节点保存设备信息
   List *lastlist = (List *)malloc(sizeof(List));
   if ( NULL == lastlist ) {
-    PRINT("add_device_to_list: malloc(lastlist) == NULL\r\n");
+    DEBUG_ERROR("add_device_to_list: malloc(lastlist) == NULL\r\n");
     return false;
   }
   
   DeviceNode *devnode = (DeviceNode *)malloc(sizeof(DeviceNode));
   if ( NULL == devnode ) {
-    PRINT("add_device_to_list:malloc(devnode) == NULL\r\n");
+    DEBUG_ERROR("add_device_to_list:malloc(devnode) == NULL\r\n");
     free(lastlist);
     return false;
   }
@@ -81,19 +85,21 @@ bool AddDeviceToList(uint16_t id)
   lastlist->next = NULL;
   //设置设备内容
   devnode->u16ID = id;
-  devnode->u8CHAN = DEFAULT_CHANNEL;
   devnode->u8CMDSTATUS = CMD_STATUS_IDLE;
   devnode->u8CMDRetry = 0;
+  devnode->DeviceOnLine = true;
+  devnode->u32Time = GetRTCTime();
   
   return true;
 }
 
+#if 0
 /*
 *   从链表内寻找指定ID的设备节点并删除
 */
 static bool delete_device_from_list(uint16_t id)
 {
-  PRINT("List:delete device[%04x]\r\n", id);
+  DEBUG_INFO("List:delete device[%04x]\r\n", id);
   //需要删除的节点
   List *del = gList->next;
   //需要删除的节点的上一个节点
@@ -128,6 +134,7 @@ static bool delete_device_from_list(uint16_t id)
   
   return false;
 }
+#endif
 
 /*
 *   设置指令ID设备节点的CMD和IDENTIFY
@@ -137,7 +144,7 @@ static bool delete_device_from_list(uint16_t id)
 bool SendCMDToList(uint16_t id, uint8_t cmd, uint32_t identify)
 {
   List *ln = gList;
-  PRINT("List:set device[%04x],cmd:%d\r\n", id, cmd);
+  DEBUG_INFO("List:set device[%04x],cmd:%d\r\n", id, cmd);
   while ( ln ) {
     if ( ln->Device ) {
       if ( ln->Device->u16ID == id ) {
@@ -150,7 +157,7 @@ bool SendCMDToList(uint16_t id, uint8_t cmd, uint32_t identify)
         } else {
           //设备忙，不允许写入新指令，返回忙信息给F405
           UartSendMSGToF405(NORMAL_BUSY, 0, identify);
-          PRINT("set_device_of_list_cmd: device busy\r\n");
+          DEBUG_INFO("set_device_of_list_cmd: device busy\r\n");
         }
         
         return true;
@@ -168,7 +175,7 @@ bool SendCMDToList(uint16_t id, uint8_t cmd, uint32_t identify)
 void SendCMDRespToList(uint16_t id, uint8_t cmd, uint32_t identify, uint8_t resp)
 {
   List *ln = gList;
-  PRINT("list: get resp, id[%d]!\r\n",id);
+  DEBUG_INFO("list: get resp, id[%d]!\r\n",id);
   while ( ln ) {
     if( ln->Device ) {
       if (ln->Device->u16ID == id) {
@@ -209,20 +216,23 @@ void ListTask(void)
       switch(ln->Device->u8CMDSTATUS) {
       case CMD_STATUS_IDLE:{
         nowTime = GetRTCTime();
-        //设备在空闲状态时如果设备累计一分钟在空闲状态，则发送一个心跳包
-        if ( nowTime - ln->Device->u32Time > HEART_TIMESTAMP ) {
-          ln->Device->u8CMDSTATUS = CMD_STATUS_STANDBY;
-          ln->Device->u8CMD = DEVICE_HEART;
-          ln->Device->u8RESP = 0;
-          ln->Device->u32Identify = 0;
+        if ((( ln->Device->DeviceOnLine == true )   //设备在线则发送心跳包
+             && ( nowTime - ln->Device->u32Time > HEART_TIMEINTERVAL )) ||
+            ((ln->Device->DeviceOnLine == false)    //设备掉线则需要等待更久时间进行心跳检测
+             && ( nowTime - ln->Device->u32Time > CHECK_OFFLINE_DEVICE_MAX_TIMEINTERVAL )))
+        {
+            ln->Device->u8CMDSTATUS = CMD_STATUS_STANDBY;
+            ln->Device->u8CMD = DEVICE_HEART;
+            ln->Device->u8RESP = 0;
+            ln->Device->u32Identify = 0;
         }
       }
       break;
       
       case CMD_STATUS_STANDBY:
         //执行准备就绪的指令
-        PRINT("list process:id:%04x\r\n",ln->Device->u16ID);
-        if (true == LoraCtrlEndPoint(ln->Device->u16ID, ln->Device->u8CHAN, ln->Device->u8CMD, ln->Device->u32Identify )) {
+        DEBUG_INFO("list process:id:%04x\r\n",ln->Device->u16ID);
+        if (true == LoraCtrlEndPoint(ln->Device->u16ID, /*ln->Device->u8CHAN, */ln->Device->u8CMD, ln->Device->u32Identify )) {
           ln->Device->u8CMDSTATUS = CMD_STATUS_RUN;
           ln->Device->u32Time = GetRTCTime();
         }
@@ -240,22 +250,36 @@ void ListTask(void)
         }
         //如果是心跳指令，则超时CMD_RETRY_TIMEINTERVAL后重试CMD_MAX_RETRY_TIMES次
         //后，若没有接收到响应包，则认为掉线
-        if ( nowTime - ln->Device->u32Time >= timeout ) {
-          //设置命令重新执行
-          ln->Device->u8CMDSTATUS = CMD_STATUS_STANDBY;
-          //重试次数加一
-          ln->Device->u8CMDRetry++;
-          if ( ln->Device->u8CMDRetry >= CMD_MAX_RETRY_TIMES ) {
-            //达到重试次数的上限都没有响应，则认为设备掉线了。
-            //从链表中删除设备，并通知f405设备掉线。
-            UartSendMSGToF405(NODE_OFFLINE, ln->Device->u16ID, 0);
-            //通知成功则删除从设备链表和flash链表内删除对应的设备
-            FlashDelDeviceFromList(ln->Device->u16ID);
-            delete_device_from_list(ln->Device->u16ID);
-            //删除节点以后必须将设备节点指针置空，否则会出现指针错误
-            ln = NULL;
-          }
-        }
+//        if ( ln->Device->DeviceOnLine == true ) {
+          //只对在线的设备进行心跳检测
+          if ( nowTime - ln->Device->u32Time >= timeout ) {
+            //设置命令重新执行
+            ln->Device->u8CMDSTATUS = CMD_STATUS_STANDBY;
+            //重试次数加一
+            ln->Device->u8CMDRetry++;
+            if ( ln->Device->u8CMDRetry >= CMD_MAX_RETRY_TIMES ) {
+              //达到重试次数的上限都没有响应，则认为设备掉线了。
+              //从链表中删除设备，并通知f405设备掉线。
+              if ( ln->Device->DeviceOnLine == true ) {
+                UartSendMSGToF405(NODE_OFFLINE, ln->Device->u16ID, 0);
+              }
+                //通知成功则删除从设备链表和flash链表内删除对应的设备
+                
+                //2018-12-11修改，修改设备掉线后的动作，不再从列表内删除，改为设置在线状态标志
+#if 0
+                FlashDelDeviceFromList(ln->Device->u16ID);
+                delete_device_from_list(ln->Device->u16ID);
+                //删除节点以后必须将设备节点指针置空，否则会出现指针错误
+                ln = NULL;
+#else
+                ln->Device->u8CMDSTATUS = CMD_STATUS_IDLE;
+                ln->Device->u8CMDRetry = 0;
+                ln->Device->DeviceOnLine = false;
+              }
+#endif
+            }
+//          }
+//        }
       }break;
       
       case CMD_STATUS_DONE: 
@@ -282,6 +306,12 @@ void ListTask(void)
           ln->Device->u8CMD = CMD_NONE;
           ln->Device->u8RESP = 0;
           ln->Device->u8CMDRetry = 0;
+          //如果是曾经掉线的设备接收到心跳包响应
+          //则重新上线该设备
+          if ( ln->Device->DeviceOnLine == false ) {
+            UartSendMSGToF405(NODE_ONLINE, ln->Device->u16ID, 0);
+            ln->Device->DeviceOnLine = true;
+          }
         }
         break;
         
@@ -304,14 +334,16 @@ void LookAllList(void)
   
   while( ln != NULL ) {
     
-    PRINT("Node %08x \r\n", ln);
+    DEBUG_INFO("Node %08x \r\n", ln);
     
     if ( ln->Device != NULL ) {
-      PRINT("\tID[%04x] CHAN[%02x]\r\n", ln->Device->u16ID, ln->Device->u8CHAN);
-      PRINT("\tCMD[%d] CMDSTATUS[%d]\r\n", ln->Device->u8CMD, ln->Device->u8CMDSTATUS);       
+      DEBUG_INFO("\tID[%04x] CMD[%d] CMDSTATUS[%d]\r\n", ln->Device->u16ID, ln->Device->u8CMD, ln->Device->u8CMDSTATUS);
     }
     
     ln = ln->next;
   }
 }
+
+
+
 
