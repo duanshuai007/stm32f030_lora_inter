@@ -10,7 +10,7 @@
   * inserted by the user or by software development tools
   * are owned by their respective copyright owners.
   *
-  * COPYRIGHT(c) 2018 STMicroelectronics
+  * COPYRIGHT(c) 2019 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -41,6 +41,7 @@
 #include "stm32f0xx_hal.h"
 
 /* USER CODE BEGIN Includes */
+#include <string.h>
 #include "Lora.h"
 #include "beep.h"
 #include "motor.h"
@@ -60,21 +61,16 @@ RTC_HandleTypeDef hrtc;
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
-DMA_HandleTypeDef hdma_usart1_rx;
-DMA_HandleTypeDef hdma_usart1_tx;
-DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 Device gDevice;
-uint8_t uart2_dma_rbuff[4];
-
+uint8_t uart2_rbuff[4];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_ADC_Init(void);
 static void MX_RTC_Init(void);
@@ -86,7 +82,7 @@ static void MX_USART2_UART_Init(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
-
+void EnterLowPower(void);
 /* USER CODE END 0 */
 
 /**
@@ -97,13 +93,12 @@ static void MX_USART2_UART_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-  //mode 表示所执行的命令是否是异步的指令，当mode=true，表示异步的指令
-  bool mode = false;
-  //flag 表示本次唤醒过程是否由地锁的异常动作唤醒
-  bool flag = false;
-  
   uint16_t serverID, localID;
   uint8_t sendCH, recvCH;
+  uint8_t sbuff[200];
+  uint8_t len;
+  
+  memset(&gDevice, 0, sizeof(gDevice));
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -124,23 +119,25 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_ADC_Init();
   MX_RTC_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   //先关闭电机位置检测引脚中断,确保注册过程不被中断
+  HAL_NVIC_DisableIRQ(EXTI4_15_IRQn);
   motor_init();
-  motor_input_pin_off_interrupt(true);
+  //低功耗模式下调试延时，如果不加很难再次刷程序
+  HAL_Delay(5000);
+  HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
+  
   LoraModuleInit();
   
   if (FLASH_Init(&serverID, &localID, &sendCH, &recvCH) == false) {
     return -1;
   }
-  
-  //低功耗模式下调试延时，如果不加很难再次刷程序
-  HAL_Delay(5000);
+
+//  serverID = 4000;  //TEST USED
   
   LoraPar lp;
   lp.u16Addr = localID;
@@ -160,81 +157,71 @@ int main(void)
   SetServer(serverID, sendCH);
   
   CloseNotUsedPeriphClock();
-  //串口重初始化
-  UART_ReInit(&huart1);
-
-  while(1) {
   
-    if(LoraRegister())
-      break;
-
-    rtc_set_timer(8);
-    
-    LowPowerInit(true, true);
-    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-    //时钟配置清空
-    HAL_RCC_DeInit();
-    //HSI时钟使能
-    __HAL_RCC_DISABLE_IT(RCC_IT_HSIRDY);
-    __HAL_RCC_HSI_ENABLE();
-    while(!__HAL_RCC_GET_FLAG(RCC_FLAG_HSIRDY));
-    //配置时钟和DMA
-    SystemClock_Config();
-    MX_DMA_Init();
-    //串口重新配置
-    UART_ReInit(&huart1);
-  }
-  //重新配置外部中断引脚
-  motor_input_pin_off_interrupt(false);
-  HAL_Delay(20);
+  UART_ReInit(&huart1);
+  LoraModuleITInit();
+  
+  gDevice.u8UltraSafeDistance = ULTRASONIC_MIN_SAFE_DISTANCE;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  
+      
   while (1)
   {
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-    //理想情况是，有数据的时侯aux会输出低电压
-    //延迟2-3ms后数据通过串口发送给mcu lora->f103
-    LowPowerInit(mode, flag);
-    gDevice.u8InteFlag = 0;
-    HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-    //while(gLoraPacket.isIdle);
-    
-    //时钟配置清空
-    HAL_RCC_DeInit();
-    //HSI时钟使能
-    __HAL_RCC_DISABLE_IT(RCC_IT_HSIRDY);
-    __HAL_RCC_HSI_ENABLE();
-    while(!__HAL_RCC_GET_FLAG(RCC_FLAG_HSIRDY));
-    //配置时钟和DMA
-    SystemClock_Config();
-    MX_DMA_Init();
-    //串口重新配置
-    UART_ReInit(&huart1);
-    LoraModuleDMAInit();
 
-    //等待接收数据完成
-    while(!LoraModuleIsIdle());
-
-    //调用数据处理,数据在中断内已经处理了
-    
-    //判断系统唤醒类型，分别是adc中断唤醒，电机检测引脚中断唤醿
-    //和aux引脚中断唤醒
-    if (mode) {
-      //在这唤醒的话那么就执行发送函数发送回应的数据
-      if ( SyncCMDDone() == 1) {
-        mode = false;
-      }
-    } else {
-      mode = ExecCMD();
+    if ((gDevice.bHasLoraInter == false) 
+        && (gDevice.bHasMotorAbnmalInter == false) 
+        && (gDevice.bHasMotorNormalInter == false)
+        && (gDevice.bHasRtcInter == false)) 
+    {
+      EnterLowPower();
     }
     
-    //中断处理
-    flag = motor_abnormal();
+    //等待接收数据完成
+    while(!LoraModuleIsIdle()){
+      HAL_Delay(1);
+    }
+    
+    //调用数据处理,数据在中断内已经处理了
+    //判断系统唤醒类型，分别是adc中断唤醒，电机检测引脚中断唤醿
+    //和aux引脚中断唤醒
+    if (gDevice.bHasLoraInter) {
+      gDevice.bHasLoraInter = false;
+      if (gDevice.u8ReCmdNumber == 0) {
+        //正常的指令处理
+        ExecCMD(&gDevice);
+      } else {
+        //处理重复指令
+        len = GetRecmdSendData(sbuff, &gDevice);
+        LoraSend(sbuff, len);
+      }
+    }
+    
+    if (gDevice.bHasRtcInter) {
+      gDevice.bHasRtcInter = false;
+      motor_abnormal_step2(&gDevice);
+      SyncCMDDone(&gDevice);  //电机运动被阻挡没能运动到指定位置时执行
+    }
+    
+    if (gDevice.bHasMotorNormalInter) {
+      //电机运动到指定位置
+      gDevice.bHasMotorNormalInter = false;
+      SyncCMDDone(&gDevice);
+      //电机在前倾时需要先落下，再重新抬起
+      if (CMD_EXEC_DOING == gDevice.u8CmdDone) {
+        ExecCMD(&gDevice);
+      }
+    }
+    
+    if (gDevice.bHasMotorAbnmalInter) {
+      //电机异常动作
+      gDevice.bHasMotorAbnmalInter = false;
+      motor_abnormal_step1(&gDevice);
+    }
   }
   /* USER CODE END 3 */
 
@@ -420,6 +407,16 @@ static void MX_RTC_Init(void)
   
   /* USER CODE END RTC_Init 5 */
 
+    /**Enable Calibration 
+    */
+  if (HAL_RTCEx_SetCalibrationOutPut(&hrtc, RTC_CALIBOUTPUT_1HZ) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+  /* USER CODE BEGIN RTC_Init 6 */
+
+  /* USER CODE END RTC_Init 6 */
+
 }
 
 /* USART1 init function */
@@ -464,24 +461,6 @@ static void MX_USART2_UART_Init(void)
 
 }
 
-/** 
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void) 
-{
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Channel2_3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel2_3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
-  /* DMA1_Channel4_5_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel4_5_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel4_5_IRQn);
-
-}
-
 /** Configure pins as 
         * Analog 
         * Input 
@@ -509,8 +488,8 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_13|GPIO_PIN_15 
                           |GPIO_PIN_4|GPIO_PIN_5, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PC13 PC14 PC15 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13|GPIO_PIN_14|GPIO_PIN_15;
+  /*Configure GPIO pins : PC14 PC15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_14|GPIO_PIN_15;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -569,7 +548,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : PB14 */
   GPIO_InitStruct.Pin = GPIO_PIN_14;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
@@ -579,7 +558,22 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+void EnterLowPower(void)
+{
+  LowPowerInit(&gDevice);
+  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+  //时钟配置清空
+  HAL_RCC_DeInit();
+  //HSI时钟使能
+  __HAL_RCC_DISABLE_IT(RCC_IT_HSIRDY);
+  __HAL_RCC_HSI_ENABLE();
+  while(!__HAL_RCC_GET_FLAG(RCC_FLAG_HSIRDY));
+  //配置时钟和DMA
+  SystemClock_Config();
+  //串口重新配置
+  UART_ReInit(&huart1);
+  LoraModuleITInit();
+}
 /* USER CODE END 4 */
 
 /**

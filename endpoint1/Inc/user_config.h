@@ -5,8 +5,6 @@
 #include "stm32f0xx.h"
 #include "lora_paramter.h"
 
-#define DEBUG
-
 typedef enum {
   false,
   true,
@@ -17,32 +15,64 @@ enum {
   CMD_RUN,
 };
 
+enum {
+  CMD_EXEC_NONE = 0,
+  CMD_EXEC_DOING,
+  CMD_EXEC_DONE
+};
+
 #define LORA_MSG_HEAD 0xA5
 #define LORA_MSG_TAIL 0x5A
-#define POOL_CLEAN    0x00
 
-#define SERVER_SEND_CMD_LEN     12
-#define SERVER_REC_RESP_LEN     13
+//单位厘米，原单位是毫米，值400
+#define ULTRASONIC_MIN_SAFE_DISTANCE  40
+
+//接收缓冲
+#define SERVER_SEND_CMD_LEN     (12)
+//发送缓冲
+#define SERVER_REC_RESP_LEN     (13)
 
 //必须根据地锁版本来进行配置
 #define MODE_OLD
 
+#define RECMD_MAX_NUMBER         10
+
 #pragma pack(1)
+
 typedef struct {
   uint8_t u8Cmd;
-  uint8_t u8ReCmd;       //接收到的重复指令
-  
-  uint8_t u8CmdRunning;   //当前有指令在运行
-  volatile uint8_t u8Resp;
-  volatile uint8_t u8CmdDone;      //异步指令执行完成标志位
-  uint8_t u8ReCmdFlag;        //指令执行过程中接到新指令标志位
-  
-  volatile uint8_t u8InteFlag;   //中断标志
-  volatile uint8_t u8InterDone;
-  
   uint32_t u32Identify;
-  uint32_t u32ReIdentify;
+} reCmd;
+
+typedef struct {
+  uint8_t u8Cmd;
+  uint8_t u8CmdRunning;   //当前有指令在运行
+  volatile uint8_t u8MotorResp;         //专用于电机的异步返回
+  volatile uint8_t u8CmdDone;      //异步指令执行完成标志位
+  
+  volatile bool bInteFlag;   //中断标志
+  bool bInterDone;
+  volatile uint8_t u8ReCmdNumber;  //接收到的重复指令的个数
+  uint8_t u8LPUseRTC;         //在低功耗模式下是否使用rtc唤醒,每有个外设调用它就+1，使用完毕则-1.
+  
+  volatile bool bHasRtcInter;
+  volatile bool bHasLoraInter;
+  volatile bool bHasMotorNormalInter;
+  volatile bool bHasMotorAbnmalInter;
+  
+  volatile uint8_t u8ReCmdPos;
+  uint16_t u16UltraDistance;
+  uint32_t u32Identify;
+  uint8_t u8UltraSafeDistance;
+  
+  reCmd sReCmd[RECMD_MAX_NUMBER];
 } Device;
+
+typedef struct {
+  uint8_t u8Cmd;
+  uint8_t u8Resp;
+  uint32_t u32Identify;
+} MsgDevice;
 #pragma pack()
 
 #define GPIO_BEEP                       GPIOB

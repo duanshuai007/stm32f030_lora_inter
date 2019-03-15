@@ -4,6 +4,7 @@
 #include "lora.h"
 #include "user_config.h"
 #include "hardware.h"
+#include "rtc.h"
 
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
@@ -11,7 +12,7 @@ extern ADC_HandleTypeDef hadc;
 
 extern LoraPacket gLoraPacket;
 extern Device gDevice;
-extern uint8_t uart2_dma_rbuff[4];
+extern uint8_t uart2_rbuff[4];
 
 //进入stop模式之前要重新根据当时的电平设置上拉下拉
 static void set_gpio(GPIO_TypeDef* GPIOx, uint16_t pin, uint32_t mode)
@@ -53,25 +54,17 @@ static void gpio_used_lp_init(void)
   set_gpio( GPIO_BEEP, GPIO_BEEP_Pin, GPIO_MODE_OUTPUT_PP);
   set_gpio( GPIO_Lora_M1, GPIO_Lora_M1_Pin, GPIO_MODE_OUTPUT_PP);
   set_gpio( GPIO_Lora_AUX, GPIO_Lora_AUX_Pin, GPIO_MODE_IT_RISING_FALLING);
-//  set_gpio( GPIO_ULTRASONIC, GPIO_ULTRASONIC_PIN, GPIO_MODE_OUTPUT_PP);
+  set_gpio( GPIO_ULTRASONIC, GPIO_ULTRASONIC_PIN, GPIO_MODE_OUTPUT_PP);
 }
 
 //关闭使用的外设
-//0 关闭所有
-//1 保留adc 
-//2 保留rtc lsi， motor指令
-void LowPowerInit(bool mode, bool flag)
+void LowPowerInit(Device *d)
 {   
   //必须停止，否则功耗会在1ma左右
   HAL_UART_Abort_IT(&huart1);
   HAL_UART_Abort_IT(&huart2);
   
   gpio_used_lp_init();
-  
-  if ((false == mode) && (false == flag)) {
-    __HAL_RCC_RTC_DISABLE();
-    __HAL_RCC_LSI_DISABLE(); 
-  }
   
   __HAL_RCC_ADC1_CLK_DISABLE();
   __HAL_RCC_TIM6_CLK_DISABLE();
@@ -82,6 +75,20 @@ void LowPowerInit(bool mode, bool flag)
   __HAL_RCC_PWR_CLK_ENABLE();
   
   __HAL_RCC_HSI_DISABLE();
+  
+  if (d->u8LPUseRTC == 0) {
+    __HAL_RCC_RTC_DISABLE();
+    __HAL_RCC_LSI_DISABLE();
+  } else {
+    //不等于0就不关闭rtc
+    __HAL_RTC_ALARM_CLEAR_FLAG(&hrtc, RTC_FLAG_ALRAF);
+  }
+  
+  __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_4);
+  __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
+  __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_14);
+//__HAL_UART_CLEAR_FLAG(&huart1, UART_IT_IDLE);
+  d->bInteFlag = false;
 }
 
 static void gpio_not_used_lp_init(void)
@@ -96,7 +103,8 @@ static void gpio_not_used_lp_init(void)
   *       PA4和PA5 是中断模式
   *       在进入休眠前根据电平值设置上拉或下拉
   */
-  GPIO_InitStruct.Pin = (GPIO_PIN_All & (~( GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_8 | GPIO_PIN_6 )));
+  GPIO_InitStruct.Pin = (GPIO_PIN_All 
+                         & (~( GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_8 | GPIO_PIN_6 )));
   //| GPIO_PIN_13 | GPIO_PIN_14 )));
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;    //在这种模式下电流最小
   GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -149,7 +157,7 @@ void CloseNotUsedPeriphClock(void)
   __HAL_RCC_TIM15_CLK_DISABLE();
   __HAL_RCC_TIM16_CLK_DISABLE();
   __HAL_RCC_TIM17_CLK_DISABLE();
-  __HAL_RCC_USART2_CLK_DISABLE();
+//  __HAL_RCC_USART2_CLK_DISABLE();
   __HAL_RCC_WWDG_CLK_DISABLE();
   
   __HAL_RCC_SRAM_CLK_DISABLE();
@@ -251,7 +259,7 @@ static void periph_used_in_adc_init(ADC_HandleTypeDef *hadc)
   }
 }
 
-static void uart2_reinit(void)
+void uart2_reinit(void)
 {
   __HAL_RCC_USART2_CLK_ENABLE();
   HAL_UART_DeInit(&huart2);
@@ -268,7 +276,7 @@ static void uart2_reinit(void)
   huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
   HAL_UART_Init(&huart2);
   
-  HAL_UART_Receive_DMA(&huart2, uart2_dma_rbuff, 4);
+  HAL_UART_Receive_IT(&huart2, uart2_rbuff, 4);
   //使能空闲中断，仅对接收起作用
   __HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
 }
@@ -277,6 +285,7 @@ void UART_ReInit(UART_HandleTypeDef *huart)
 {
   __HAL_RCC_USART1_CLK_ENABLE();
   HAL_UART_DeInit(huart);
+  
   huart->Instance = USART1;
   huart->Init.BaudRate = 57600;
   huart->Init.WordLength = UART_WORDLENGTH_9B;
@@ -295,7 +304,6 @@ void InitPeriphByCMD(void)
   switch(gDevice.u8Cmd)
   {
   case HW_MOTOR_UP:
-    uart2_reinit();
   case HW_MOTOR_DOWN:
   case HW_MOTOR_GET:
     //驱动电机用到的外设资源包括，gpio(PB4\5,PA4\5\6,TIM6)
@@ -317,102 +325,124 @@ void InitPeriphByCMD(void)
   }
 }
 
-//0 表示空指令，错误状态
-//1 异步指令执行完成
-//2 指令执行中接收到新指令，繁忙
-uint8_t SyncCMDDone(void)
+void SyncCMDDone(Device *d)
 {
-  uint8_t ret = 0;
+  uint8_t sbuff[32];
+  uint8_t len;
+  MsgDevice md;
   //异步指令执行完成后发送resp信息
-  if (HW_CMD_NONE != gDevice.u8Cmd) {
-    
-    if ((CMD_RUN == gDevice.u8CmdRunning) && ( 1 == gDevice.u8CmdDone)) {
-    
-      LoraTransfer(NORMALCMD);
-      
-      gDevice.u8CmdDone = 0;
-      //发送完成，清空状态标志信息，准备再次接收执行指令
-      if(gDevice.u8ReCmdFlag)
-        gDevice.u8ReCmdFlag = 0;
-      
-      gDevice.u8Cmd = HW_CMD_NONE;
-      gDevice.u8Resp = 0;
-      gDevice.u8CmdRunning = CMD_STOP;
-      
-      ret = 1;
-    } else if (gDevice.u8ReCmdFlag) {
-      //在指令执行过程中接收到新指令，返回繁忙状态
-      gDevice.u8ReCmdFlag = 0;
-      gDevice.u8Resp = HW_BUSY;
-      
-      LoraTransfer(RECMD);
-      
-      ret = 2;
-    }
-  }
+  if (HW_CMD_NONE == d->u8Cmd)
+    return;
   
-  return ret;
+  if (CMD_RUN != d->u8CmdRunning)
+    return;
+  
+  if ( CMD_EXEC_DONE == d->u8CmdDone) {
+    md.u8Cmd = d->u8Cmd;
+    md.u8Resp = d->u8MotorResp;
+    md.u32Identify = d->u32Identify;
+    
+    len = GetSendData(sbuff, &md);
+    LoraSend(sbuff, len);
+    
+    d->u8CmdDone = CMD_EXEC_NONE;
+    d->u8Cmd = HW_CMD_NONE;
+    d->u8MotorResp = 0;
+    d->u8CmdRunning = CMD_STOP;
+
+  } else if ( CMD_EXEC_DOING == d->u8CmdDone) {
+    //对应前倾状态先落下后抬起
+    d->u8CmdRunning = CMD_STOP;
+  } else {  //CMD_EXEC_NONE
+    //do nothing
+  }
 }
 
-bool ExecCMD(void)
+void ExecCMD(Device *d)
 {   
-  bool mode = false;
+  uint8_t len;
+  uint8_t sbuff[32];
+  MsgDevice md;
   
-  if (HW_CMD_NONE != gDevice.u8Cmd) {
-    
-    //执行指令，在执行指令之前先初始化对应功能所用到的外设资源
-    InitPeriphByCMD();
-    
-    if ((gDevice.u8Cmd != HW_CMD_NONE) && (gDevice.u8CmdRunning == CMD_STOP)) {
-      
-      gDevice.u8CmdRunning = CMD_RUN;
-      
-      uint8_t ret = hardware_ctrl((HW_CMD)gDevice.u8Cmd);
-      
-      if (gDevice.u8Cmd > HW_MOTOR_DOWN ) {
-        //give server some response
-        gDevice.u8Resp = ret;
-        LoraTransfer(NORMALCMD);
-        //指令执行结束，清空状态信息
-        gDevice.u8Cmd = HW_CMD_NONE;
-        gDevice.u8Resp = 0;
-        gDevice.u8CmdRunning = CMD_STOP;
-      } else if ((gDevice.u8Cmd == HW_MOTOR_UP) || (gDevice.u8Cmd == HW_MOTOR_DOWN)) {
-        //返回指令开始执行的resp
-        //该段代码用于电机执行动作后返回电机开始动作的resp
-        if ( ret == MOTOR_OK ) {
-          //正常执行动作后立刻返回一个响应信息
-          gDevice.u8Resp = MOTOR_RUN;
-          LoraTransfer(NORMALCMD);
-        }
-        else if (ret == MOTOR_DONTDO) {
-          //电机处于目标状态不需要执行动作
-          LoraTransfer(NORMALCMD);
-          gDevice.u8Cmd = HW_CMD_NONE;
-          gDevice.u8Resp = 0;
-          gDevice.u8CmdRunning = CMD_STOP;
-          gDevice.u8CmdDone = 0;
-        } else if (( ret == MOTOR_ERROR) || (ret == MOTOR_ERROR_ULTRA)) {
-          if (ret == MOTOR_ERROR)
-            gDevice.u8Resp = MOTOR_CANTUP;
-          else if (ret == MOTOR_ERROR_ULTRA)
-            gDevice.u8Resp = MOTOR_CANTUP_ULTRA;
-          
-          LoraTransfer(NORMALCMD);
-          gDevice.u8Cmd = HW_CMD_NONE;
-          gDevice.u8Resp = 0;
-          gDevice.u8CmdRunning = CMD_STOP;
-          gDevice.u8CmdDone = 0;
-        }
-      }
-    }
-    
-    if ((gDevice.u8Cmd == HW_MOTOR_UP) || (gDevice.u8Cmd == HW_MOTOR_DOWN)) {
-      mode = true;
-    } else {
-      mode = false;
-    }
+  if (d->u8Cmd == HW_CMD_NONE)
+    return;
+  
+  if (CMD_STOP != d->u8CmdRunning)
+    return;
+  
+  //判断指令是否支持
+  if ((d->u8Cmd >= HW_CMD_MAXVALUE) && (d->u8Cmd != HW_DEVICE_HEART)) {
+    d->u8Cmd = HW_CMD_NONE;
+    return;
   }
+  //执行指令，在执行指令之前先初始化对应功能所用到的外设资源
+  InitPeriphByCMD();  
   
-  return mode;
+  d->u8CmdRunning = CMD_RUN;
+  
+  uint8_t ret = hardware_ctrl(d);
+  
+  switch(d->u8Cmd) {
+  case HW_MOTOR_UP:
+  case HW_MOTOR_DOWN:
+    //该段代码用于电机执行动作后返回电机开始动作的resp
+    switch(ret) {
+    case MOTOR_OK:
+      //正常执行动作后立刻返回一个响应信息
+      md.u8Cmd = d->u8Cmd;
+      md.u8Resp = MOTOR_RUN;
+      md.u32Identify = d->u32Identify;
+      len = GetSendData(sbuff, &md);
+      LoraSend(sbuff, len);
+      break;
+    case MOTOR_DONTDO:
+      //电机处于目标状态不需要执行动作
+      md.u8Cmd = d->u8Cmd;
+      md.u8Resp = 0;
+      md.u32Identify = d->u32Identify;
+      len = GetSendData(sbuff, &md);
+      LoraSend(sbuff, len);
+      d->u8Cmd = HW_CMD_NONE;
+      d->u8CmdRunning = CMD_STOP;
+      d->u8CmdDone = CMD_EXEC_NONE;
+      break;
+    case MOTOR_ERROR:
+    case MOTOR_ERROR_ULTRA:
+      md.u8Cmd = d->u8Cmd;
+      md.u8Resp = ret;
+      md.u32Identify = d->u32Identify;
+      len = GetSendData(sbuff, &md);
+      LoraSend(sbuff, len);
+      d->u8Cmd = HW_CMD_NONE;
+      d->u8CmdRunning = CMD_STOP;
+      d->u8CmdDone = CMD_EXEC_NONE;
+      break;
+    default:
+      break;
+    }
+    break;
+  case HW_MOTOR_GET:
+  case HW_BEEP_ON:
+  case HW_BEEP_OFF:
+  case HW_BEEP_GET:
+  case HW_ADC_GET:
+  case HW_DEVICE_HEART:
+  case HW_ULTRA_GET:
+  case HW_ULTRA_SAFE_SET:
+  case HW_ULTRA_SAFE_GET:
+    //give server some response
+    md.u8Cmd = d->u8Cmd;
+    md.u8Resp = ret;
+    md.u32Identify = d->u32Identify;
+    len = GetSendData(sbuff, &md);
+    LoraSend(sbuff, len);
+    //指令执行结束，清空状态信息
+    d->u8Cmd = HW_CMD_NONE;
+    d->u8CmdRunning = CMD_STOP;
+    break;
+  default:
+    d->u8Cmd = HW_CMD_NONE;
+    d->u8CmdRunning = CMD_STOP;
+    break;
+  }
 }

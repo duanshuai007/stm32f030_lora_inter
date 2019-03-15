@@ -3,7 +3,6 @@
 #include "stdlib.h"
 #include "lora.h"
 
-
 static void strtohex(uint16_t *dst, uint32_t *src, uint8_t srclen)
 {
   uint8_t i, j;
@@ -38,22 +37,21 @@ bool FLASH_Init(uint16_t *serverid, uint16_t *localid, uint8_t *sendch, uint8_t 
   uint16_t channel;
   
   dat = READ_FLASH_WORD(FLASH_DATABASE_START);
-  if( FLASH_MSG_HEAD == dat) {
-    //如果flash内已经有了有效的数据
-    buffer[0] = READ_FLASH_WORD(FLASH_DATABASE_START + 4);
-    buffer[1] = READ_FLASH_WORD(FLASH_DATABASE_START + 8);
-    buffer[2] = READ_FLASH_WORD(FLASH_DATABASE_START + 12);
-    
-    strtohex(serverid,  &buffer[0], 1);
-    strtohex(localid,   &buffer[1], 1);
-    strtohex(&channel,  &buffer[2], 1);
-    //读取的最后一个位置的数据就是通道，高16b是接收，低16b是发送
-    
-    *sendch = (uint8_t)channel;
-    *recvch = (uint8_t)(channel >> 8);
-    
-    return true;    
-  }
-
-  return false;
+  if( FLASH_MSG_HEAD != dat) 
+    return false;
+  
+  //如果flash内已经有了有效的数据
+  buffer[0] = READ_FLASH_WORD(FLASH_DATABASE_START + 4);
+  buffer[1] = READ_FLASH_WORD(FLASH_DATABASE_START + 8);
+  buffer[2] = READ_FLASH_WORD(FLASH_DATABASE_START + 12);
+  
+  strtohex(serverid,  &buffer[0], 1);
+  strtohex(localid,   &buffer[1], 1);
+  strtohex(&channel,  &buffer[2], 1);
+  //读取的最后一个位置的数据就是通道，高16b是接收，低16b是发送
+  
+  *sendch = (uint8_t)channel;
+  *recvch = (uint8_t)(channel >> 8);
+  
+  return true;    
 }

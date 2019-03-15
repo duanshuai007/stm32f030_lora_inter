@@ -12,8 +12,7 @@
 *   需要运行一段时间才能返回。mode = 0 对应即时返回 = 1对应非即时返回
 *   flag：对应异常动作标志，产生异常动作不同于命令控制 =1 对应有异常动作产生
 */
-void LowPowerInit(bool mode, bool flag);
-
+void LowPowerInit(Device *d);
 /*
 *   系统上电后会调用
 *   对系统中从未用到的外设和引脚进行设置
@@ -24,7 +23,7 @@ void CloseNotUsedPeriphClock(void);
 *   处理控制命令，同步命令返回0
 *   异步命令返回1
 */
-bool ExecCMD(void);
+void ExecCMD(Device *d);
 
 /*
 *   每次从低功耗模式被唤醒后需要重新初始化串口
@@ -34,6 +33,11 @@ void UART_ReInit(UART_HandleTypeDef *huart);
 /*
 *   异步命令的执行结果处理，通过lora发送resp信息
 */
-uint8_t SyncCMDDone(void);
+void SyncCMDDone(Device *d);
+
+/*
+*   串口2重新初始化
+*/
+void uart2_reinit(void);
 
 #endif

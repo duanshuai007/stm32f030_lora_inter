@@ -4,12 +4,15 @@
 #include "beep.h"
 #include "motor.h"
 #include "rtc.h"
+#include "ultra.h"
+#include "user_config.h"
 
 extern ADC_HandleTypeDef hadc;
 
-uint8_t hardware_ctrl(HW_CMD cmd)
+uint8_t hardware_ctrl(Device *d)
 {
-  uint8_t ret = 0;
+  uint8_t ret = 1;
+  HW_CMD cmd = (HW_CMD)d->u8Cmd;
   
   switch(cmd)
   {
@@ -44,11 +47,31 @@ uint8_t hardware_ctrl(HW_CMD cmd)
     ret -= 78;
     //转换成为0-100之间的数倿
     //116-78 = 38
-    ret *= 10;
+    ret *= 3;
     //这里向上取整，用4做除敿
     break;
   case HW_DEVICE_HEART:
-    ret = 1;
+  case HW_ULTRA_GET:
+    {
+      uint8_t result = 0;
+      ret = motor_get_status();
+      result |= (ret << 4);
+      if (MOTOR_DOWN == ret) {
+        ret = ReadUltraData();
+        if (ret < d->u8UltraSafeDistance) //小于安全距离，有车
+          result |= 1;
+      } else {
+        result |= 0xf;
+      }
+      ret = result;
+    }
+    break;
+  case HW_ULTRA_SAFE_SET:
+    d->u8UltraSafeDistance = (uint8_t)d->u32Identify;
+    ret = 0;
+    break;
+  case HW_ULTRA_SAFE_GET:
+    ret = d->u8UltraSafeDistance;
     break;
   default:
     ret = 0xff;

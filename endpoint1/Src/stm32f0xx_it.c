@@ -4,7 +4,7 @@
   * @brief   Interrupt Service Routines.
   ******************************************************************************
   *
-  * COPYRIGHT(c) 2018 STMicroelectronics
+  * COPYRIGHT(c) 2019 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -39,16 +39,18 @@
 #include "stm32f0xx_hal_rtc.h"
 #include "Lora.h"
 #include "motor.h"
+#include "rtc.h"
+#include "user_config.h"
+#include "ultra.h"
 
 extern LoraPacket gLoraPacket;
-extern uint8_t uart2_dma_rbuff[4];
+extern uint8_t uart2_rbuff[4];
+extern Motor motor;
+extern Device gDevice;
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
 extern RTC_HandleTypeDef hrtc;
-extern DMA_HandleTypeDef hdma_usart1_rx;
-extern DMA_HandleTypeDef hdma_usart1_tx;
-extern DMA_HandleTypeDef hdma_usart2_rx;
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 
@@ -166,35 +168,6 @@ void EXTI4_15_IRQHandler(void)
 }
 
 /**
-* @brief This function handles DMA1 channel 2 and 3 interrupts.
-*/
-void DMA1_Channel2_3_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMA1_Channel2_3_IRQn 0 */
-  
-  /* USER CODE END DMA1_Channel2_3_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_usart1_tx);
-  HAL_DMA_IRQHandler(&hdma_usart1_rx);
-  /* USER CODE BEGIN DMA1_Channel2_3_IRQn 1 */
-  
-  /* USER CODE END DMA1_Channel2_3_IRQn 1 */
-}
-
-/**
-* @brief This function handles DMA1 channel 4 and 5 interrupts.
-*/
-void DMA1_Channel4_5_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMA1_Channel4_5_IRQn 0 */
-
-  /* USER CODE END DMA1_Channel4_5_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_usart2_rx);
-  /* USER CODE BEGIN DMA1_Channel4_5_IRQn 1 */
-
-  /* USER CODE END DMA1_Channel4_5_IRQn 1 */
-}
-
-/**
 * @brief This function handles USART1 global interrupt.
 */
 void USART1_IRQHandler(void)
@@ -205,8 +178,7 @@ void USART1_IRQHandler(void)
   HAL_UART_IRQHandler(&huart1);
   /* USER CODE BEGIN USART1_IRQn 1 */
   //空闲中断，仅仅接收会触发空闲中断
-  if(__HAL_UART_GET_IT(&huart1,UART_IT_IDLE)!=RESET)
-  {
+  if(__HAL_UART_GET_IT(&huart1,UART_IT_IDLE)!=RESET) {
     __HAL_UART_CLEAR_IT(&huart1, UART_CLEAR_IDLEF);
   }
   /* USER CODE END USART1_IRQn 1 */
@@ -222,19 +194,22 @@ void USART2_IRQHandler(void)
   /* USER CODE END USART2_IRQn 0 */
   HAL_UART_IRQHandler(&huart2);
   /* USER CODE BEGIN USART2_IRQn 1 */
-  if(__HAL_UART_GET_IT(&huart2,UART_IT_IDLE)!=RESET)
-  {
+  if(__HAL_UART_GET_IT(&huart2,UART_IT_IDLE)!=RESET) {
     __HAL_UART_CLEAR_IT(&huart2, UART_CLEAR_IDLEF);
   }
   /* USER CODE END USART2_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
-
-extern Motor motor;
-
 void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
 {
+  if (gDevice.u8LPUseRTC > 0)
+    gDevice.u8LPUseRTC--;
+
+  //异常动作定时时间到
+  if (gDevice.bInterDone == true)
+    gDevice.bHasRtcInter = true;
+  
   if ( motor.ctrl_timer_cb ) {
     motor.ctrl_timer_cb();
   }
@@ -243,9 +218,8 @@ void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   if(GPIO_Lora_AUX_Pin == GPIO_Pin)
-  {   //AUX interrupt
-    //仅仅用来唤醒cpu，不做其他动作
-//    LoraModuleIsIdleHandler();
+  { //AUX interrupt
+    //只唤醒，不需要做额外动作。
   } else {
     //gpio回调函数
     if ( motor.gpio_cb ) {
@@ -256,10 +230,36 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
+  uint8_t i,pos;
+  uint8_t buffer[4];
+  
   if ( huart->Instance == USART1 ) {
     LoraModuleReceiveHandler();
   } else if ( huart->Instance == USART2 ) {
-    HAL_UART_Receive_DMA(&huart2, uart2_dma_rbuff, 4);
+    //寻找到超声波数据的头0xff
+    for(i=0;i<4;i++) {
+      if ( uart2_rbuff[i] == 0xff ) {
+        pos = i;
+      }
+    }
+    //数据复制到buffer里
+    for(i=0;i<4;i++) {
+      buffer[i] = uart2_rbuff[pos];
+      pos++;
+      if(pos == 4) 
+        pos = 0;
+    }
+    //格式化后读取
+    UltraSonicType *ust = (UltraSonicType *)buffer;
+    if ( ust->head == 0xff ) {
+      if ((( ust->head + ust->data_h + ust->data_l ) & 0xff) == ust->sum) {
+        gDevice.u16UltraDistance = (((uint16_t)(ust->data_h)) << 8 | ust->data_l);
+      }
+    } else {
+      gDevice.u16UltraDistance = 0xffff;
+    }
+    
+    HAL_UART_Receive_IT(&huart2, uart2_rbuff, 4);
   }
 }
 

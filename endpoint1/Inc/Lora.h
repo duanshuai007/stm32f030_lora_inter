@@ -59,18 +59,16 @@ typedef struct {
 } CmdDataPacket;
 
 typedef struct {
-//    volatile bool     isIdle; //IDLE FLAG
-  
     Lora_Mode mode;   //work mode
     uint16_t  u16ServerID;
     uint8_t   u8ServerCH;
     LoraPar   paramter;
 
-    uint8_t   dma_sbuff_size;
-    uint8_t   dma_rbuff_size;
+//    uint8_t   sbuff_size;
+    uint8_t   rbuff_size;
     
-    uint8_t   *dma_sbuff; //dma send buffer
-    uint8_t   *dma_rbuff; //dma receive buffer
+//    uint8_t   *sbuff; //send buffer
+    uint8_t   *rbuff; //receive buffer
 } LoraPacket;
 
 #pragma pack()
@@ -84,24 +82,20 @@ void LoraWriteParamter(LoraPar *lp);
 
 void LoraReadParamter(void);
 
-void LoraModuleDMAInit(void);
+void LoraModuleITInit(void);
 //reset lora module
 uint8_t Lora_Reset(LoraPacket *lp);
+//generate normal data
+uint8_t GetSendData(uint8_t *sendbuff, MsgDevice *d);
+//generate recmd data
+uint8_t GetRecmdSendData(uint8_t *sendbuff, Device *d);
 //send data
-bool LoraTransfer(uint8_t flag);
-
-//
-bool LoraRegister(void);
+bool LoraSend(uint8_t *sbuff, uint8_t len);
 
 /*
 *   判断模块是否空闲
 */
 bool LoraModuleIsIdle(void);
-
-/*
-*   AUX引脚中断处理函数
-*/
-//void LoraModuleIsIdleHandler(void);
 
 /*
 *   Lora模块所对应的串口数据接收完成中断处理

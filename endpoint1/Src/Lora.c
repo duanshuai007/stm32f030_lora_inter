@@ -9,23 +9,11 @@
 
 extern UART_HandleTypeDef huart1;
 
-static LoraPacket gLoraPacket;
-static uint8_t uart1_dma_rbuff[SERVER_SEND_CMD_LEN] = {0};
-static uint8_t uart1_dma_sbuff[SERVER_REC_RESP_LEN] = {0};
-
 extern Device gDevice;
 extern DMA_HandleTypeDef hdma_usart1_rx;
 
-void LoraModuleInit(void)
-{
-  memset(&gLoraPacket, 0, sizeof(LoraPacket));
-  
-  gLoraPacket.dma_rbuff = &uart1_dma_rbuff[0];
-  gLoraPacket.dma_rbuff_size = SERVER_SEND_CMD_LEN;
-  
-  gLoraPacket.dma_sbuff = &uart1_dma_sbuff[0];
-  gLoraPacket.dma_sbuff_size = SERVER_REC_RESP_LEN;
-}
+LoraPacket gLoraPacket;
+static uint8_t uart1_dma_rbuff[SERVER_SEND_CMD_LEN] = {0};
 
 void SetServer(uint16_t serverid, uint8_t ch)
 {
@@ -33,15 +21,20 @@ void SetServer(uint16_t serverid, uint8_t ch)
   gLoraPacket.u8ServerCH = ch;
 }
 
+/*
+*       AUX高电平表示空闲状态，低电平表示忙状态
+*/
+bool LoraModuleIsIdle(void)
+{
+  if ( HAL_GPIO_ReadPin(GPIO_Lora_AUX, GPIO_Lora_AUX_Pin) == GPIO_PIN_SET )
+    return true;
+  else
+    return false;
+}
+
 static bool set_loramodule_workmode(Lora_Mode lm)
 {
-#define LORA_SET_MAX_TIME 	500
-  
-  uint16_t delay = 0;
-  
   gLoraPacket.mode = lm;
-  
-  HAL_Delay(5);       //必须的延时，至少5ms
   
   switch(gLoraPacket.mode)
   {
@@ -64,17 +57,16 @@ static bool set_loramodule_workmode(Lora_Mode lm)
   default:
     return false;
   }
-  
-  do {
-    HAL_Delay(2);   //必须的do{}while(...)循环，先执行一遍延时
-    delay++;
-  } while((!LoraModuleIsIdle()) && (delay < LORA_SET_MAX_TIME));
-  
-  if(delay >= LORA_SET_MAX_TIME)
-    return false;
 
-  
   return true;
+}
+
+void LoraModuleInit(void)
+{
+  memset(&gLoraPacket, 0, sizeof(LoraPacket));
+  
+  gLoraPacket.rbuff = &uart1_dma_rbuff[0];
+  gLoraPacket.rbuff_size = SERVER_SEND_CMD_LEN;
 }
 
 /*
@@ -223,12 +215,9 @@ static bool loramodule_generate_paramter(uint8_t *buff, SaveType st)
     return false;
   }
   
-  if(gLoraPacket.paramter.u8FEC)
-  {
+  if(gLoraPacket.paramter.u8FEC) {
     buff[5] |= 1 << 2;
-  }
-  else
-  {
+  } else {
     buff[5] |= 0 << 2;
   }
   
@@ -257,8 +246,7 @@ static bool loramodule_generate_paramter(uint8_t *buff, SaveType st)
 *       Set Lora Paramter
 */
 static bool set_loramodule_paramter(void)
-{  
-#define LORA_SET_PAR_MAX_TIME 	100
+{
   uint8_t config[6] = {0};
   
   if (!loramodule_generate_paramter(config, SAVE_IN_FLASH))
@@ -272,7 +260,6 @@ static bool set_loramodule_paramter(void)
     if (HAL_UART_Receive(&huart1, config, 6, 1000) == HAL_OK) {
       return true;
     }
-    return false;
   }
   
   return false;
@@ -308,7 +295,7 @@ static void get_loramodule_paramter(uint8_t *buff)
 */
 static bool read_loramodule(void)
 {
-#define LORA_READ_PAR_MAX_TIME 100
+//#define LORA_READ_PAR_MAX_TIME 100
   
   uint8_t cmd[3] = {0xC1, 0xC1, 0xC1};
   uint8_t buffer[6] = {0};
@@ -327,13 +314,12 @@ static bool read_loramodule(void)
 static void uart_set_9600_8n1(UART_HandleTypeDef *huart)
 {
   __HAL_UART_DISABLE(huart);
+  
   huart->Init.BaudRate = 9600;
   huart->Init.WordLength = UART_WORDLENGTH_8B;
   huart->Init.Parity = UART_PARITY_NONE;
-  if (HAL_UART_Init(huart) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
+  
+  HAL_UART_Init(huart);
   HAL_Delay(10);
 }
 
@@ -343,44 +329,35 @@ static void uart_set_baud_parity(UART_HandleTypeDef *huart, BaudType baud, Parit
   
   __HAL_UART_DISABLE(huart);
   huart->Init.BaudRate = baud_array[baud];
-  if (( PARITY_8N1 == parity) || ( PARITY_8N1_S == parity)) {
-    //无校验
+  
+  switch (parity) {
+  case PARITY_8N1:
+  case PARITY_8N1_S:
     huart->Init.WordLength = UART_WORDLENGTH_8B;
     huart->Init.Parity = UART_PARITY_NONE;
-  } else if ( PARITY_8O1 == parity ) {
+    break;
+  case PARITY_8O1:
     huart->Init.WordLength = UART_WORDLENGTH_9B;
     huart->Init.Parity = UART_PARITY_ODD;
-  } else if ( PARITY_8E1 == parity ) {
+    break;
+  case PARITY_8E1:
     huart->Init.WordLength = UART_WORDLENGTH_9B;
     huart->Init.Parity = UART_PARITY_EVEN;
+    break;
+  default:
+    break;
   }
   
-  if (HAL_UART_Init(huart) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
+  HAL_UART_Init(huart);
   HAL_Delay(10);
 }
 
-/*
-*       AUX高电平表示空闲状态，低电平表示忙状态
-*/
-bool LoraModuleIsIdle(void)
+void LoraModuleITInit(void)
 {
-//  return gLoraPacket.isIdle;
-  if ( HAL_GPIO_ReadPin(GPIO_Lora_AUX, GPIO_Lora_AUX_Pin) == GPIO_PIN_SET )
-    return true;
-  else
-    return false;
-}
-
-void LoraModuleDMAInit(void)
-{
-  HAL_UART_Receive_DMA(&huart1, gLoraPacket.dma_rbuff, gLoraPacket.dma_rbuff_size);
+    HAL_UART_Receive_IT(&huart1, gLoraPacket.rbuff, gLoraPacket.rbuff_size);
   //使能空闲中断，仅对接收起作用
   __HAL_UART_ENABLE_IT(&huart1, UART_IT_IDLE);
 }
-
 /*
 *   向Lora模块写入配置参数
 */
@@ -407,139 +384,104 @@ void LoraReadParamter(void)
   HAL_Delay(100);
   while(!read_loramodule());
   uart_set_baud_parity(&huart1, (BaudType)gLoraPacket.paramter.u8Baud, (ParityType)gLoraPacket.paramter.u8Parity);
-  set_loramodule_workmode(LoraMode_Normal);
-}
-
-
-/*
-*   通过lora发送一串数据
-*   Device 结构体指针，指向全局变量gDevice      
-*
-*/
-bool LoraTransfer(uint8_t flag)
-{
-#define LORA_MAX_IDLE_WAIT      200
-  
-  uint8_t delay = 0;
-  
-  while((!LoraModuleIsIdle()) && (delay < LORA_MAX_IDLE_WAIT))
-  {
-    delay++;
-    HAL_Delay(1);
-  }
-  
-  if (delay >= LORA_MAX_IDLE_WAIT) {
-    return false;
-  }
-  
-  if ( LoraMode_Normal != gLoraPacket.mode) {
-    set_loramodule_workmode(LoraMode_Normal);
-  }
-  
-//  gLoraPacket.dma_sbuff[0] = (uint8_t)((TARGET_ID & 0xff00) >> 8);
-//  gLoraPacket.dma_sbuff[1] = (uint8_t)(TARGET_ID & 0x00ff);
-  gLoraPacket.dma_sbuff[0] = (uint8_t)((gLoraPacket.u16ServerID & 0xff00) >> 8);
-  gLoraPacket.dma_sbuff[1] = (uint8_t)(gLoraPacket.u16ServerID & 0x00ff);
-  gLoraPacket.dma_sbuff[2] = gLoraPacket.u8ServerCH;
-  
-  RespDataPacket *ptr = (RespDataPacket *)(gLoraPacket.dma_sbuff + 3);
-  ptr->u8Head = LORA_MSG_HEAD;
-  ptr->u8Len  = SERVER_REC_RESP_LEN;
-  ptr->u16Id  = gLoraPacket.paramter.u16Addr;
-  
-  ptr->u8Resp = gDevice.u8Resp;
-  if ( flag == RECMD ) {
-    ptr->u8Cmd = gDevice.u8ReCmd;
-    ptr->u32Identify = gDevice.u32ReIdentify;
-  } else {
-    ptr->u8Cmd  = gDevice.u8Cmd;
-    ptr->u32Identify = gDevice.u32Identify;
-  }
-  ptr->u16Crc = CRC16_IBM((gLoraPacket.dma_sbuff + 3), SERVER_REC_RESP_LEN - 3);
-  ptr->u8Tail = LORA_MSG_TAIL;
-  
-  HAL_UART_Transmit_DMA(&huart1, gLoraPacket.dma_sbuff, ptr->u8Len + 3);
-  
-  HAL_Delay(3);
-  
-  while(!LoraModuleIsIdle());
-  
   set_loramodule_workmode(LoraMode_LowPower);
-  
-  return true;
 }
 
-bool LoraRegister(void)
+uint8_t GetSendData(uint8_t *sendbuff, MsgDevice *d)
 {
-#define LORA_MAX_IDLE_WAIT      200
-#define UART_MAX_SEND_WAIT      200
+  sendbuff[0] = (uint8_t)((gLoraPacket.u16ServerID & 0xff00) >> 8);
+  sendbuff[1] = (uint8_t)(gLoraPacket.u16ServerID & 0x00ff);
+  sendbuff[2] = gLoraPacket.u8ServerCH;
   
-  bool ret = false;
-  uint8_t delay = 0;
-  uint8_t buffer[12] = {0};
-  
-  while((!LoraModuleIsIdle()) && (delay < LORA_MAX_IDLE_WAIT))
-  {
-    delay++;
-    HAL_Delay(1);
-  }
-  
-  if (delay >= LORA_MAX_IDLE_WAIT) {
-    return false;
-  }
-  
-  if ( LoraMode_Normal != gLoraPacket.mode) {
-    set_loramodule_workmode(LoraMode_Normal);
-  }
-  
-//  gLoraPacket.dma_sbuff[0] = (uint8_t)((TARGET_ID & 0xff00) >> 8);
-//  gLoraPacket.dma_sbuff[1] = (uint8_t)(TARGET_ID & 0x00ff);
-  gLoraPacket.dma_sbuff[0] = (uint8_t)((gLoraPacket.u16ServerID & 0xff00) >> 8);
-  gLoraPacket.dma_sbuff[1] = (uint8_t)(gLoraPacket.u16ServerID & 0x00ff);
-  gLoraPacket.dma_sbuff[2] = gLoraPacket.u8ServerCH;
-
-  RespDataPacket *ptr = (RespDataPacket *)(gLoraPacket.dma_sbuff + 3);
+  RespDataPacket *ptr = (RespDataPacket *)(sendbuff + 3);
   ptr->u8Head = LORA_MSG_HEAD;
   ptr->u8Len  = SERVER_REC_RESP_LEN;
-  ptr->u16Id  = gLoraPacket.paramter.u16Addr;
-  ptr->u8Resp = 0;
-  ptr->u8Cmd  = HW_DEVICE_ONLINE;
-  ptr->u32Identify = 0;
-  ptr->u16Crc = CRC16_IBM((uint8_t *)ptr, SERVER_REC_RESP_LEN - 3);
+  ptr->u16Id  = gLoraPacket.paramter.u16Addr;  
+  ptr->u8Resp = d->u8Resp;
+  ptr->u8Cmd  = d->u8Cmd;
+  ptr->u32Identify = d->u32Identify;
+  ptr->u16Crc = CRC16_IBM((sendbuff + 3), SERVER_REC_RESP_LEN - 3);
   ptr->u8Tail = LORA_MSG_TAIL;
   
-  if ( HAL_OK == HAL_UART_Transmit(&huart1, gLoraPacket.dma_sbuff, ptr->u8Len + 3, 100)) {
-    if ( HAL_OK == HAL_UART_Receive(&huart1, buffer, SERVER_SEND_CMD_LEN, 2000) ) {
+  return  ptr->u8Len + 3;
+}
+
+uint8_t GetRecmdSendData(uint8_t *sendbuff, Device *d)
+{
+  uint8_t len;
+  uint8_t i;
+  uint8_t number, pos;
+  
+  if (d->u8ReCmdNumber == 0)
+    return 0;
+  
+  number = d->u8ReCmdNumber;
+  pos = d->u8ReCmdPos;
+  //获取起始地址
+  if (pos >= number) {
+    pos = pos - number;
+  } else {
+    pos = RECMD_MAX_NUMBER - (number - pos);
+  }
+  
+  sendbuff[0] = (uint8_t)((gLoraPacket.u16ServerID & 0xff00) >> 8);
+  sendbuff[1] = (uint8_t)(gLoraPacket.u16ServerID & 0x00ff);
+  sendbuff[2] = gLoraPacket.u8ServerCH;
+  
+  for(i=0; i < number; i++)
+  {
+    RespDataPacket *ptr = (RespDataPacket *)(sendbuff + 3 + (SERVER_REC_RESP_LEN * i));
+    ptr->u8Head = LORA_MSG_HEAD;
+    ptr->u8Len  = SERVER_REC_RESP_LEN;
+    ptr->u16Id  = gLoraPacket.paramter.u16Addr;
     
-      CmdDataPacket *cmd = (CmdDataPacket *)buffer;
-      if(cmd->u8Cmd == HW_DEVICE_ONLINE)
-//        return true;
-        ret = true;
-      else
-        ret = false;
-//        return false;
+    ptr->u8Resp = HW_DEVICE_BUSY;
+    ptr->u8Cmd  = d->sReCmd[pos].u8Cmd;
+    ptr->u32Identify = d->sReCmd[pos].u32Identify;
+    ptr->u16Crc = CRC16_IBM((sendbuff + 3), SERVER_REC_RESP_LEN - 3);
+    ptr->u8Tail = LORA_MSG_TAIL;
+    pos++;
+    if (pos == RECMD_MAX_NUMBER) {
+      pos = 0;
     }
   }
   
-  HAL_Delay(3);
+  len = 3 + (i * SERVER_REC_RESP_LEN);
   
-  while(!LoraModuleIsIdle());
+  d->u8ReCmdNumber -= number;
   
-  set_loramodule_workmode(LoraMode_LowPower);
-  
-  return ret;
+  return len;
 }
 
-/**
-*   AUX引脚中断处理函数，判断lora是否是空闲状态
-*/
-//void LoraModuleIsIdleHandler(void)
-//{
-////  if ( HAL_GPIO_ReadPin(GPIO_Lora_AUX, GPIO_Lora_AUX_Pin) == GPIO_PIN_SET )
-////    gLoraPacket.isIdle = true;
-////  else
-////    gLoraPacket.isIdle = false;
-//}
+bool LoraSend(uint8_t *sbuff, uint8_t len)
+{
+#define LORA_MAX_IDLE_WAIT      200
+  
+  uint8_t delay = 0;
+  
+  while((!LoraModuleIsIdle()) && (delay < LORA_MAX_IDLE_WAIT))
+  {
+    delay++;
+    HAL_Delay(2);
+  }
+  if (delay >= LORA_MAX_IDLE_WAIT) {
+    return false;
+  }
+  if ( LoraMode_Normal != gLoraPacket.mode) {
+    HAL_Delay(5);       //必须的延时，至少5ms
+    set_loramodule_workmode(LoraMode_Normal);
+  }
+  HAL_Delay(3); //必要的延时，不加就会导致发送不成功
+  HAL_UART_Transmit(&huart1, sbuff, len, 100);
+  HAL_Delay(2); //必要的延时，不加就会导致发送不成功
+  while(!LoraModuleIsIdle());
+  HAL_Delay(5);
+  set_loramodule_workmode(LoraMode_LowPower);
+
+//  HAL_Delay(500);
+  
+  return true;
+}
 
 /**
 *   Lora模块接收数据处理
@@ -549,20 +491,31 @@ void LoraModuleReceiveHandler(void)
   uint16_t crc;
   LoraPacket *lp = &gLoraPacket;
   
-  CmdDataPacket *cdp = (CmdDataPacket *)lp->dma_rbuff;
-  if (( cdp->u8Head == LORA_MSG_HEAD ) && (cdp->u8Tail == LORA_MSG_TAIL)) {
-    crc = CRC16_IBM((uint8_t *)cdp, SERVER_SEND_CMD_LEN -3);
-    if ( crc == cdp->u16Crc ) {
-      if ((gDevice.u8Cmd != HW_CMD_NONE) && (gDevice.u8CmdRunning == CMD_RUN)) {
-        gDevice.u8ReCmdFlag = 1;
-        gDevice.u8ReCmd = cdp->u8Cmd;
-        gDevice.u32ReIdentify = cdp->u32Identify;
-      } else if (cdp->u8Cmd != HW_DEVICE_ONLINE ) {
-        gDevice.u8Cmd = cdp->u8Cmd;
-        gDevice.u32Identify = cdp->u32Identify;
-      }
-    }
+  CmdDataPacket *cdp = (CmdDataPacket *)lp->rbuff;
+  
+  if ((cdp->u8Head != LORA_MSG_HEAD) || (cdp->u8Tail != LORA_MSG_TAIL))
+    return;
+
+  crc = CRC16_IBM((uint8_t *)cdp, SERVER_SEND_CMD_LEN -3);
+  if ( crc != cdp->u16Crc )
+    return;
+      
+  //if ((gDevice.u8Cmd != HW_CMD_NONE) && (gDevice.u8CmdRunning == CMD_RUN)) {
+  if (gDevice.u8Cmd != HW_CMD_NONE) {
+    //处理重复命令的逻辑
+    gDevice.sReCmd[gDevice.u8ReCmdPos].u8Cmd = cdp->u8Cmd;
+    gDevice.sReCmd[gDevice.u8ReCmdPos].u32Identify = cdp->u32Identify;
+    gDevice.u8ReCmdNumber++;
+    gDevice.u8ReCmdPos++;
+    if (gDevice.u8ReCmdPos >= 10)
+      gDevice.u8ReCmdPos = 0;
+  } else {
+    //处理非重复命令的逻辑，包括控制命令和注册响应
+    gDevice.u8Cmd = cdp->u8Cmd;
+    gDevice.u32Identify = cdp->u32Identify;
   }
   
-  HAL_UART_Receive_DMA(&huart1, lp->dma_rbuff, lp->dma_rbuff_size);
+  gDevice.bHasLoraInter = true;
+  
+  HAL_UART_Receive_IT(&huart1, gLoraPacket.rbuff, gLoraPacket.rbuff_size);
 }

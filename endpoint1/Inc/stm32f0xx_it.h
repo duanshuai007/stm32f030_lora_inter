@@ -4,7 +4,7 @@
   * @brief   This file contains the headers of the interrupt handlers.
   ******************************************************************************
   *
-  * COPYRIGHT(c) 2018 STMicroelectronics
+  * COPYRIGHT(c) 2019 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -54,8 +54,6 @@ void PendSV_Handler(void);
 void SysTick_Handler(void);
 void RTC_IRQHandler(void);
 void EXTI4_15_IRQHandler(void);
-void DMA1_Channel2_3_IRQHandler(void);
-void DMA1_Channel4_5_IRQHandler(void);
 void USART1_IRQHandler(void);
 void USART2_IRQHandler(void);
 

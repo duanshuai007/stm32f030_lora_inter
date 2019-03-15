@@ -206,6 +206,9 @@
       <name>$PROJ_DIR$\..\Src\rtc.c</name>
     </file>
     <file>
+      <name>$PROJ_DIR$\..\Src\ultra.c</name>
+    </file>
+    <file>
       <name>$PROJ_DIR$\..\Inc\user_config.h</name>
     </file>
   </group>

@@ -11,6 +11,7 @@
 typedef enum {
     MOTOR_CMD_IDLE    = 0,
     MOTOR_CMD_DOWN    = 1,
+    MOTOR_CMD_DOWN_INTERNAL = 2,
     MOTOR_CMD_UP      = 3,
 } MOTOR_CMD;
 
@@ -19,13 +20,6 @@ typedef void (* motor_check_callback)(MOTOR_CB_TYPE m);
 typedef void (* motor_gpio_callback)(uint16_t pin);
 typedef void (* timer_gpio_xd_callback)(void);
 typedef void (* timer_ctrl_timeout_callback)(void);
-
-typedef struct {
-  uint8_t head;
-  uint8_t data_h;
-  uint8_t data_l;
-  uint8_t sum;
-} UltraSonicType;
 
 typedef struct {
     volatile MOTOR_STATUS status;     //电机当前状态 1=卧倒,2=前倾,3=直立,4=后倾
@@ -47,9 +41,12 @@ MOTOR_STATUS motor_get_status(void);
 void motor_init(void);
 
 //电机位置检测引脚中断开启和关闭
-void motor_input_pin_off_interrupt(bool b);
+void set_motor_gpio_normal(void);
+void set_motor_gpio_interrupt(void);
+void motor_input_pin_close_interrupt(bool b);
 
 //电机异常动作处理
-bool motor_abnormal(void);
+void motor_abnormal_step1(Device *d);
+void motor_abnormal_step2(Device *d);
 
 #endif
