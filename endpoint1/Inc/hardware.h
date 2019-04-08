@@ -36,8 +36,8 @@ typedef enum {
   //返回值    超声波测距得到的距离值 0-255之间，单位厘米
   //出错返回 0xff
   //设置/获取超声波安全距离值
-  HW_ULTRA_SAFE_SET,
-  HW_ULTRA_SAFE_GET,
+  HW_ULTRA_SAFE_SET,  //9
+  HW_ULTRA_SAFE_GET,  //0x0a
   
   HW_CMD_MAXVALUE,
 } HW_CMD;

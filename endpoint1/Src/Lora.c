@@ -10,9 +10,8 @@
 extern UART_HandleTypeDef huart1;
 
 extern Device gDevice;
-extern DMA_HandleTypeDef hdma_usart1_rx;
 
-LoraPacket gLoraPacket;
+static LoraPacket gLoraPacket;
 static uint8_t uart1_dma_rbuff[SERVER_SEND_CMD_LEN] = {0};
 
 void SetServer(uint16_t serverid, uint8_t ch)
@@ -295,8 +294,6 @@ static void get_loramodule_paramter(uint8_t *buff)
 */
 static bool read_loramodule(void)
 {
-//#define LORA_READ_PAR_MAX_TIME 100
-  
   uint8_t cmd[3] = {0xC1, 0xC1, 0xC1};
   uint8_t buffer[6] = {0};
 
@@ -513,6 +510,11 @@ void LoraModuleReceiveHandler(void)
     //处理非重复命令的逻辑，包括控制命令和注册响应
     gDevice.u8Cmd = cdp->u8Cmd;
     gDevice.u32Identify = cdp->u32Identify;
+    //如果是设置超声波安全距离的指令，
+    //设置的超声波距离通过len发送过来
+    if (cdp->u8Cmd == HW_ULTRA_SAFE_SET) {
+      gDevice.u8UltraSafeDistance = cdp->u8Len;
+    }
   }
   
   gDevice.bHasLoraInter = true;

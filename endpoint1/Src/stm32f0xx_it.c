@@ -159,11 +159,10 @@ void EXTI4_15_IRQHandler(void)
   /* USER CODE BEGIN EXTI4_15_IRQn 0 */
   
   /* USER CODE END EXTI4_15_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_4);
-  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_5);
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_14);
   /* USER CODE BEGIN EXTI4_15_IRQn 1 */
-  
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_4);
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_5);
   /* USER CODE END EXTI4_15_IRQn 1 */
 }
 
@@ -203,13 +202,6 @@ void USART2_IRQHandler(void)
 /* USER CODE BEGIN 1 */
 void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
 {
-  if (gDevice.u8LPUseRTC > 0)
-    gDevice.u8LPUseRTC--;
-
-  //异常动作定时时间到
-  if (gDevice.bInterDone == true)
-    gDevice.bHasRtcInter = true;
-  
   if ( motor.ctrl_timer_cb ) {
     motor.ctrl_timer_cb();
   }

@@ -182,6 +182,9 @@
   <group>
     <name>USER</name>
     <file>
+      <name>$PROJ_DIR$\..\Src\adc.c</name>
+    </file>
+    <file>
       <name>$PROJ_DIR$\..\Src\beep.c</name>
     </file>
     <file>

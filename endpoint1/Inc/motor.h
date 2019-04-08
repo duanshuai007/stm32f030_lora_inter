@@ -25,7 +25,7 @@ typedef struct {
     volatile MOTOR_STATUS status;     //电机当前状态 1=卧倒,2=前倾,3=直立,4=后倾
     volatile MOTOR_CMD action;     //命令
 
-    volatile MOTOR_STATUS last_status;    //保存上一次的正常位置状态
+//    volatile MOTOR_STATUS last_status;    //保存上一次的正常位置状态
     MOTOR_STATUS can_stop; //开始运动时的位置状态，用来对电机上升时进行停止判断。
 
     motor_ctrl_callback         ctrl_cb;
@@ -33,20 +33,23 @@ typedef struct {
     timer_ctrl_timeout_callback ctrl_timer_cb;
 } Motor;
 
+void GPIO_MotorSenserInit(void);
+void GPIO_Motor_Init(uint8_t cmd);
 //电机控制函数
 MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd);
 //获取电机位置状态的函数
-MOTOR_STATUS motor_get_status(void);
+MOTOR_STATUS MotorGetStatus(void);
 
 void motor_init(void);
 
 //电机位置检测引脚中断开启和关闭
 void set_motor_gpio_normal(void);
 void set_motor_gpio_interrupt(void);
-void motor_input_pin_close_interrupt(bool b);
 
+void MotorSenceSwitch(bool b);
 //电机异常动作处理
-void motor_abnormal_step1(Device *d);
-void motor_abnormal_step2(Device *d);
+void MotorAbnormalCheck(Device *d);
+void MotorAbnormalProcess(Device *d);
 
 #endif
+

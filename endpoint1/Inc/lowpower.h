@@ -35,9 +35,4 @@ void UART_ReInit(UART_HandleTypeDef *huart);
 */
 void SyncCMDDone(Device *d);
 
-/*
-*   串口2重新初始化
-*/
-void uart2_reinit(void);
-
 #endif

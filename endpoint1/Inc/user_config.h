@@ -45,20 +45,19 @@ typedef struct {
 } reCmd;
 
 typedef struct {
+  bool bRegister;
   uint8_t u8Cmd;
   uint8_t u8CmdRunning;   //当前有指令在运行
   volatile uint8_t u8MotorResp;         //专用于电机的异步返回
   volatile uint8_t u8CmdDone;      //异步指令执行完成标志位
   
-  volatile bool bInteFlag;   //中断标志
-  bool bInterDone;
+  bool bMotorAbnormal;
   volatile uint8_t u8ReCmdNumber;  //接收到的重复指令的个数
-  uint8_t u8LPUseRTC;         //在低功耗模式下是否使用rtc唤醒,每有个外设调用它就+1，使用完毕则-1.
+  bool bMotorUseRTC;         //在低功耗模式下是否使用rtc唤醒,每有个外设调用它就+1，使用完毕则-1.
   
   volatile bool bHasRtcInter;
   volatile bool bHasLoraInter;
   volatile bool bHasMotorNormalInter;
-  volatile bool bHasMotorAbnmalInter;
   
   volatile uint8_t u8ReCmdPos;
   uint16_t u16UltraDistance;
@@ -76,7 +75,7 @@ typedef struct {
 #pragma pack()
 
 #define GPIO_BEEP                       GPIOB
-#define GPIO_BEEP_Pin                   GPIO_PIN_10
+#define GPIO_BEEP_Pin                   GPIO_PIN_10     //下拉电阻2K
 //LORA所占用的引脚
 #define GPIO_Lora_M0 	                  GPIOA
 #define GPIO_Lora_M1	                  GPIOB

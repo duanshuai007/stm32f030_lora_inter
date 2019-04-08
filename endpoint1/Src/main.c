@@ -65,7 +65,6 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 Device gDevice;
-uint8_t uart2_rbuff[4];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -97,8 +96,7 @@ int main(void)
   uint8_t sendCH, recvCH;
   uint8_t sbuff[200];
   uint8_t len;
-  
-  memset(&gDevice, 0, sizeof(gDevice));
+  uint16_t distance;
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -124,25 +122,29 @@ int main(void)
   MX_RTC_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  //先关闭电机位置检测引脚中断,确保注册过程不被中断
+  //先关闭中断，不然位置检测模块上电后会导致触发一次异常动作
   HAL_NVIC_DisableIRQ(EXTI4_15_IRQn);
   motor_init();
   //低功耗模式下调试延时，如果不加很难再次刷程序
   HAL_Delay(5000);
+  //一定要再次打开中断，否则gpio的所有中断都被关闭了
   HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
   
   LoraModuleInit();
   
-  if (FLASH_Init(&serverID, &localID, &sendCH, &recvCH) == false) {
+  if (FLASH_Init(&serverID, &localID, &sendCH, &recvCH, &distance) == false) {
     return -1;
   }
-
-//  serverID = 4000;  //TEST USED
+  
+  serverID = 4000;  //TEST USED
   
   LoraPar lp;
   lp.u16Addr = localID;
   lp.u8Baud = BAUD_57600;
+  
   lp.u8Channel = recvCH;
+//  lp.u8Channel = (localID % 30);
+  
   lp.u8FEC = FEC_ENABLE;
   lp.u8IOMode = IOMODE_PP;
   lp.u8Parity = PARITY_8O1;
@@ -152,21 +154,23 @@ int main(void)
   lp.u8WakeUpTime = WAKEUP_TIME_500MS;
   LoraWriteParamter( &lp );
   
+  //读取完参数之后lora设置为低功耗模式
   LoraReadParamter();
   
   SetServer(serverID, sendCH);
   
-  CloseNotUsedPeriphClock();
-  
   UART_ReInit(&huart1);
   LoraModuleITInit();
+  CloseNotUsedPeriphClock();
   
-  gDevice.u8UltraSafeDistance = ULTRASONIC_MIN_SAFE_DISTANCE;
+  memset(&gDevice, 0, sizeof(gDevice));
+  
+  gDevice.u8UltraSafeDistance = (uint8_t)distance;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-      
+  
   while (1)
   {
   /* USER CODE END WHILE */
@@ -174,9 +178,8 @@ int main(void)
   /* USER CODE BEGIN 3 */
 
     if ((gDevice.bHasLoraInter == false) 
-        && (gDevice.bHasMotorAbnmalInter == false) 
         && (gDevice.bHasMotorNormalInter == false)
-        && (gDevice.bHasRtcInter == false)) 
+        && (gDevice.bHasRtcInter == false))
     {
       EnterLowPower();
     }
@@ -186,16 +189,24 @@ int main(void)
       HAL_Delay(1);
     }
     
+    if (gDevice.bRegister == false) {
+      if (gDevice.u8Cmd == HW_DEVICE_HEART) {
+        gDevice.bRegister = true;
+      } else {
+        distance = gDevice.u8UltraSafeDistance;
+        memset(&gDevice, 0, sizeof(gDevice));
+        gDevice.u8UltraSafeDistance = distance;
+        continue;
+      }
+    }
+    
     //调用数据处理,数据在中断内已经处理了
     //判断系统唤醒类型，分别是adc中断唤醒，电机检测引脚中断唤醿
     //和aux引脚中断唤醒
     if (gDevice.bHasLoraInter) {
       gDevice.bHasLoraInter = false;
-      if (gDevice.u8ReCmdNumber == 0) {
-        //正常的指令处理
-        ExecCMD(&gDevice);
-      } else {
-        //处理重复指令
+      ExecCMD(&gDevice);
+      if (gDevice.u8ReCmdNumber != 0) {
         len = GetRecmdSendData(sbuff, &gDevice);
         LoraSend(sbuff, len);
       }
@@ -203,7 +214,6 @@ int main(void)
     
     if (gDevice.bHasRtcInter) {
       gDevice.bHasRtcInter = false;
-      motor_abnormal_step2(&gDevice);
       SyncCMDDone(&gDevice);  //电机运动被阻挡没能运动到指定位置时执行
     }
     
@@ -217,11 +227,9 @@ int main(void)
       }
     }
     
-    if (gDevice.bHasMotorAbnmalInter) {
-      //电机异常动作
-      gDevice.bHasMotorAbnmalInter = false;
-      motor_abnormal_step1(&gDevice);
-    }
+    MotorAbnormalProcess(&gDevice);
+    MotorAbnormalCheck(&gDevice);
+    
   }
   /* USER CODE END 3 */
 
@@ -296,7 +304,7 @@ static void MX_ADC_Init(void)
     */
   hadc.Instance = ADC1;
   hadc.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
-  hadc.Init.Resolution = ADC_RESOLUTION_8B;
+  hadc.Init.Resolution = ADC_RESOLUTION_12B;
   hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
   hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
@@ -318,6 +326,14 @@ static void MX_ADC_Init(void)
   sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
   sConfig.SamplingTime = ADC_SAMPLETIME_28CYCLES_5;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+    /**Configure for the selected ADC regular channel to be converted. 
+    */
+  sConfig.Channel = ADC_CHANNEL_VREFINT;
   if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -485,8 +501,11 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_13|GPIO_PIN_15 
-                          |GPIO_PIN_4|GPIO_PIN_5, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_15|GPIO_PIN_4 
+                          |GPIO_PIN_5, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_SET);
 
   /*Configure GPIO pins : PC14 PC15 */
   GPIO_InitStruct.Pin = GPIO_PIN_14|GPIO_PIN_15;
@@ -508,8 +527,8 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : PA4 PA5 */
   GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PA6 PA7 PA8 */
@@ -529,19 +548,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB10 PB11 PB15 PB4 
-                           PB5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_15|GPIO_PIN_4 
-                          |GPIO_PIN_5;
+  /*Configure GPIO pins : PB10 PB11 PB13 PB15 
+                           PB4 PB5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_13|GPIO_PIN_15 
+                          |GPIO_PIN_4|GPIO_PIN_5;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PB13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 

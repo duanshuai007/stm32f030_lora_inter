@@ -9,7 +9,7 @@
 
 #define READ_FLASH_WORD(addr) (*(volatile uint32_t *)(addr))
 
-//bool FLASH_Init(void);
-bool FLASH_Init(uint16_t *serverid, uint16_t *localid, uint8_t *sendch, uint8_t *recvch);
+bool FLASH_Init(uint16_t *serverid, uint16_t *localid, uint8_t *sendch, uint8_t *recvch, uint16_t *ultra_safevalue);
+bool FLASH_Write_UltraSafeDistance(uint8_t distance);
 
 #endif

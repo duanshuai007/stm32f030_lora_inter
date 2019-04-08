@@ -84,6 +84,3 @@ typedef enum {
 } ReadType;
 
 #endif
-
-
-

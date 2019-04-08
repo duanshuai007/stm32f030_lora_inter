@@ -8,9 +8,6 @@ extern Device gDevice;
 
 void rtc_disable(void)
 {
-  if (gDevice.u8LPUseRTC > 0)
-    gDevice.u8LPUseRTC--;
-  
   HAL_RTC_DeactivateAlarm(&hrtc, RTC_ALARM_A);
 }
 
@@ -66,8 +63,6 @@ void rtc_set_timer(uint8_t time)
   HAL_RTC_SetAlarm_IT(&hrtc, &sAlarm, RTC_FORMAT_BIN);
   
   HAL_RTCEx_SetCalibrationOutPut(&hrtc, RTC_CALIBOUTPUT_1HZ);
-  
-  gDevice.u8LPUseRTC++;
 }
 
 
