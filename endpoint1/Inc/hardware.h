@@ -38,7 +38,9 @@ typedef enum {
   //设置/获取超声波安全距离值
   HW_ULTRA_SAFE_SET,  //9
   HW_ULTRA_SAFE_GET,  //0x0a
-  
+  HW_ULTRA_CHECKTIME_SET, //0xb
+  HW_ULTRA_CHECKTIME_GET, //0xc
+  HW_SYSTEM_RESET,        //0xd
   HW_CMD_MAXVALUE,
 } HW_CMD;
 
@@ -56,9 +58,9 @@ typedef enum {
   MOTOR_ERROR_ULTRA = 6,
   
   MOTOR_RUNNING   = HW_DEVICE_BUSY,
-  MOTOR_OK_NOSEND = 98,
   MOTOR_RUN = 99,
 
+//  MOTOR_STATUS_UNKNOW = 0xfe,
   MOTOR_DONTDO = 0xff,
 } MOTOR_STATUS;
 
@@ -70,6 +72,6 @@ typedef enum {
   ACTION_FAIL_HOUQING     = 4,
 } MOTOR_CB_TYPE;
 
-uint8_t hardware_ctrl(Device *d);
+void hardware_ctrl(Device *d);
 
 #endif

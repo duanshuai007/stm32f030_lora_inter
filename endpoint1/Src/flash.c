@@ -53,9 +53,9 @@ static void u8tostr(uint32_t *dst, uint8_t *src)
 
 //从FLASH地址0X0800F000处读取本机id，server id，信道
 //FROG+[32位 serverid]+[32位 本机id]+[32位信道]
-bool FLASH_Init(uint16_t *serverid, uint16_t *localid, uint8_t *sendch, uint8_t *recvch, uint16_t *ultra_safevalue)
+bool FLASH_Init(uint16_t *serverid, uint16_t *localid, uint8_t *sendch, uint8_t *recvch, uint16_t *ultra_safevalue, uint16_t *ultra_checktime)
 {
-  uint32_t buffer[4];
+  uint32_t buffer[5];
   uint32_t dat;
   uint16_t channel;
   
@@ -68,11 +68,13 @@ bool FLASH_Init(uint16_t *serverid, uint16_t *localid, uint8_t *sendch, uint8_t 
   buffer[1] = READ_FLASH_WORD(FLASH_DATABASE_START + 8);
   buffer[2] = READ_FLASH_WORD(FLASH_DATABASE_START + 12);
   buffer[3] = READ_FLASH_WORD(FLASH_DATABASE_START + 16);
+  buffer[4] = READ_FLASH_WORD(FLASH_DATABASE_START + 20);
   
   strtohex(serverid,  &buffer[0], 1);
   strtohex(localid,   &buffer[1], 1);
   strtohex(&channel,  &buffer[2], 1);
   strtohex(ultra_safevalue, &buffer[3], 1);
+  strtohex(ultra_checktime, &buffer[4], 1);
   //读取的最后一个位置的数据就是通道，高16b是接收，低16b是发送
   
   *sendch = (uint8_t)channel;
@@ -85,22 +87,27 @@ bool FLASH_Init(uint16_t *serverid, uint16_t *localid, uint8_t *sendch, uint8_t 
 //保存在flash中的是字符串形式的十六进制数
 //比如distance=0x28
 //保存在flash中则为 0x30 0x30 0x32 0x38
-bool FLASH_Write_UltraSafeDistance(uint8_t distance)
+//flag: 0 表示写入安全距离
+//    : 1 表示写入检测间隔
+//返回值:0 success
+//      1 failed
+uint8_t FLASH_Write(uint8_t flag, uint8_t value)
 {
-  uint32_t buffer[4];
+  uint32_t buffer[5];
   uint32_t dat;
   uint32_t pageerror = 0;
   FLASH_EraseInitTypeDef f;
   
   dat = READ_FLASH_WORD(FLASH_DATABASE_START);
   if( FLASH_MSG_HEAD != dat) 
-    return false;
+    return 1;
   
   buffer[0] = READ_FLASH_WORD(FLASH_DATABASE_START + 4);
   buffer[1] = READ_FLASH_WORD(FLASH_DATABASE_START + 8);
   buffer[2] = READ_FLASH_WORD(FLASH_DATABASE_START + 12);
-//  buffer[3] = READ_FLASH_WORD(FLASH_DATABASE_START + 16);
-  
+  buffer[3] = READ_FLASH_WORD(FLASH_DATABASE_START + 16);
+  buffer[4] = READ_FLASH_WORD(FLASH_DATABASE_START + 20);
+
   HAL_FLASH_Unlock();
   
   f.TypeErase = FLASH_TYPEERASE_PAGES;
@@ -108,19 +115,26 @@ bool FLASH_Write_UltraSafeDistance(uint8_t distance)
   f.NbPages = 1;
   
   if ( HAL_OK != HAL_FLASHEx_Erase(&f, &pageerror)) {
-    return false;
+    return 1;
   }
   
-  buffer[3] = 0;
-  u8tostr(&buffer[3], &distance);
+  if (flag == FLASH_UPDATE_ULTRA_DISTANCE) {
+    buffer[3] = 0;
+    u8tostr(&buffer[3], &value);
+  } else {
+    //FLASH_UPDATE_ULTRA_TIMEINTERVAL
+    buffer[4] = 0;
+    u8tostr(&buffer[4], &value);
+  }
   
   HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, FLASH_DATABASE_START,       FLASH_MSG_HEAD);
   HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, FLASH_DATABASE_START + 4,   buffer[0]);
   HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, FLASH_DATABASE_START + 8,   buffer[1]);
   HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, FLASH_DATABASE_START + 12,  buffer[2]);
   HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, FLASH_DATABASE_START + 16,  buffer[3]);
+  HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, FLASH_DATABASE_START + 20,  buffer[4]);
 
   HAL_FLASH_Lock();
   
-  return true;
+  return 0;
 }

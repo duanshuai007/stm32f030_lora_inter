@@ -895,7 +895,7 @@ HAL_StatusTypeDef HAL_RTC_SetAlarm(RTC_HandleTypeDef *hrtc, RTC_AlarmTypeDef *sA
   *             @arg RTC_FORMAT_BIN: Binary data format 
   *             @arg RTC_FORMAT_BCD: BCD data format
   * @note   The Alarm register can only be written when the corresponding Alarm
-  *         is disabled (Use the HAL_RTC_DeactivateAlarm()).   
+  *         is disabled (Use the HAL_RTC_DeactivateAlarm()).
   * @note   The HAL_RTC_SetTime() must be called before enabling the Alarm feature.   
   * @retval HAL status
   */

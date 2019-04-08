@@ -45,14 +45,13 @@
 
 extern LoraPacket gLoraPacket;
 extern uint8_t uart2_rbuff[4];
-extern Motor motor;
+extern Motor gMotor;
 extern Device gDevice;
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
 extern RTC_HandleTypeDef hrtc;
 extern UART_HandleTypeDef huart1;
-extern UART_HandleTypeDef huart2;
 
 /******************************************************************************/
 /*            Cortex-M0 Processor Interruption and Exception Handlers         */ 
@@ -64,10 +63,10 @@ extern UART_HandleTypeDef huart2;
 void NMI_Handler(void)
 {
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
-  
+
   /* USER CODE END NonMaskableInt_IRQn 0 */
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
-  
+
   /* USER CODE END NonMaskableInt_IRQn 1 */
 }
 
@@ -77,7 +76,7 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-  
+
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
@@ -85,7 +84,7 @@ void HardFault_Handler(void)
     /* USER CODE END W1_HardFault_IRQn 0 */
   }
   /* USER CODE BEGIN HardFault_IRQn 1 */
-  
+
   /* USER CODE END HardFault_IRQn 1 */
 }
 
@@ -95,10 +94,10 @@ void HardFault_Handler(void)
 void SVC_Handler(void)
 {
   /* USER CODE BEGIN SVC_IRQn 0 */
-  
+
   /* USER CODE END SVC_IRQn 0 */
   /* USER CODE BEGIN SVC_IRQn 1 */
-  
+
   /* USER CODE END SVC_IRQn 1 */
 }
 
@@ -108,10 +107,10 @@ void SVC_Handler(void)
 void PendSV_Handler(void)
 {
   /* USER CODE BEGIN PendSV_IRQn 0 */
-  
+
   /* USER CODE END PendSV_IRQn 0 */
   /* USER CODE BEGIN PendSV_IRQn 1 */
-  
+
   /* USER CODE END PendSV_IRQn 1 */
 }
 
@@ -121,12 +120,12 @@ void PendSV_Handler(void)
 void SysTick_Handler(void)
 {
   /* USER CODE BEGIN SysTick_IRQn 0 */
-  
+
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
   HAL_SYSTICK_IRQHandler();
   /* USER CODE BEGIN SysTick_IRQn 1 */
-  
+
   /* USER CODE END SysTick_IRQn 1 */
 }
 
@@ -143,11 +142,11 @@ void SysTick_Handler(void)
 void RTC_IRQHandler(void)
 {
   /* USER CODE BEGIN RTC_IRQn 0 */
-  
+
   /* USER CODE END RTC_IRQn 0 */
   HAL_RTC_AlarmIRQHandler(&hrtc);
   /* USER CODE BEGIN RTC_IRQn 1 */
-  
+
   /* USER CODE END RTC_IRQn 1 */
 }
 
@@ -157,7 +156,7 @@ void RTC_IRQHandler(void)
 void EXTI4_15_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI4_15_IRQn 0 */
-  
+
   /* USER CODE END EXTI4_15_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_14);
   /* USER CODE BEGIN EXTI4_15_IRQn 1 */
@@ -172,38 +171,22 @@ void EXTI4_15_IRQHandler(void)
 void USART1_IRQHandler(void)
 {
   /* USER CODE BEGIN USART1_IRQn 0 */
-  
+
   /* USER CODE END USART1_IRQn 0 */
   HAL_UART_IRQHandler(&huart1);
   /* USER CODE BEGIN USART1_IRQn 1 */
   //空闲中断，仅仅接收会触发空闲中断
-  if(__HAL_UART_GET_IT(&huart1,UART_IT_IDLE)!=RESET) {
-    __HAL_UART_CLEAR_IT(&huart1, UART_CLEAR_IDLEF);
-  }
+//  if(__HAL_UART_GET_IT(&huart1,UART_IT_IDLE)!=RESET) {
+//    __HAL_UART_CLEAR_IT(&huart1, UART_CLEAR_IDLEF);
+//  }
   /* USER CODE END USART1_IRQn 1 */
-}
-
-/**
-* @brief This function handles USART2 global interrupt.
-*/
-void USART2_IRQHandler(void)
-{
-  /* USER CODE BEGIN USART2_IRQn 0 */
-
-  /* USER CODE END USART2_IRQn 0 */
-  HAL_UART_IRQHandler(&huart2);
-  /* USER CODE BEGIN USART2_IRQn 1 */
-  if(__HAL_UART_GET_IT(&huart2,UART_IT_IDLE)!=RESET) {
-    __HAL_UART_CLEAR_IT(&huart2, UART_CLEAR_IDLEF);
-  }
-  /* USER CODE END USART2_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
 void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
 {
-  if ( motor.ctrl_timer_cb ) {
-    motor.ctrl_timer_cb();
+  if ( gMotor.ctrl_timer_cb ) {
+    gMotor.ctrl_timer_cb();
   }
 }
 
@@ -214,51 +197,25 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     //只唤醒，不需要做额外动作。
   } else {
     //gpio回调函数
-    if ( motor.gpio_cb ) {
-      motor.gpio_cb(GPIO_Pin);
+    if ( gMotor.gpio_cb ) {
+      gMotor.gpio_cb(GPIO_Pin);
     }
   }
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-  uint8_t i,pos;
-  uint8_t buffer[4];
-  
   if ( huart->Instance == USART1 ) {
     LoraModuleReceiveHandler();
   } else if ( huart->Instance == USART2 ) {
-    //寻找到超声波数据的头0xff
-    for(i=0;i<4;i++) {
-      if ( uart2_rbuff[i] == 0xff ) {
-        pos = i;
-      }
-    }
-    //数据复制到buffer里
-    for(i=0;i<4;i++) {
-      buffer[i] = uart2_rbuff[pos];
-      pos++;
-      if(pos == 4) 
-        pos = 0;
-    }
-    //格式化后读取
-    UltraSonicType *ust = (UltraSonicType *)buffer;
-    if ( ust->head == 0xff ) {
-      if ((( ust->head + ust->data_h + ust->data_l ) & 0xff) == ust->sum) {
-        gDevice.u16UltraDistance = (((uint16_t)(ust->data_h)) << 8 | ust->data_l);
-      }
-    } else {
-      gDevice.u16UltraDistance = 0xffff;
-    }
-    
-    HAL_UART_Receive_IT(&huart2, uart2_rbuff, 4);
+//    UltraModuleRecviveHandler();
   }
 }
 
 //错误处理
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
-  uint32_t no;
+  uint32_t errno;
   /*
 #define HAL_UART_ERROR_PE        (0x00000001U)     Parity error        
 #define HAL_UART_ERROR_NE        (0x00000002U)     Noise error         
@@ -267,27 +224,27 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 #define HAL_UART_ERROR_DMA       (0x00000010U)     DMA transfer error  
 #define HAL_UART_ERROR_BUSY
   */
-  no = HAL_UART_GetError(huart);
+  errno = HAL_UART_GetError(huart);
   //    printf("usart errno no = %d\r\n", no);
-  if( no & HAL_UART_ERROR_FE) {
+  if( errno & HAL_UART_ERROR_FE) {
     //frame error
     __HAL_UART_CLEAR_FEFLAG(huart);
   }
-  if (no & HAL_UART_ERROR_PE) {
+  if (errno & HAL_UART_ERROR_PE) {
     //parity error
     __HAL_UART_CLEAR_PEFLAG(huart);
   }
-  if (no & HAL_UART_ERROR_NE) {
+  if (errno & HAL_UART_ERROR_NE) {
     __HAL_UART_CLEAR_NEFLAG(huart);
   }
-  if ( no & HAL_UART_ERROR_ORE ) {
+  if (errno & HAL_UART_ERROR_ORE ) {
     __HAL_UART_CLEAR_OREFLAG(huart);
   }
 }
 
 void HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc)
 {
-  uint32_t no;
+  uint32_t errno;
   /*
 #define HAL_ADC_ERROR_NONE        (0x00U)    No error
 #define HAL_ADC_ERROR_INTERNAL    (0x01U)    ADC IP internal error: if problem of clocking,
@@ -296,9 +253,9 @@ void HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc)
 #define HAL_ADC_ERROR_DMA         (0x04U)    DMA transfer error 
   */ 
   
-  no = HAL_ADC_GetError(hadc);
+  errno = HAL_ADC_GetError(hadc);
   
-  if ( no & HAL_ADC_ERROR_OVR ) {
+  if ( errno & HAL_ADC_ERROR_OVR ) {
     __HAL_ADC_CLEAR_FLAG(hadc, ADC_FLAG_OVR);
   }
 }

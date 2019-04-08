@@ -74,8 +74,8 @@ typedef enum {
 } SendDBType;
 
 typedef enum {
-  SAVE_NONE,
-  SAVE_IN_FLASH,
+  SAVE_IN_FLASH = 0xC0,
+  SAVE_NONE     = 0xC2,
 } SaveType;
 
 typedef enum {

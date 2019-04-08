@@ -16,16 +16,15 @@ typedef enum {
 } MOTOR_CMD;
 
 typedef void (* motor_ctrl_callback)(MOTOR_CB_TYPE m);
-typedef void (* motor_check_callback)(MOTOR_CB_TYPE m);
 typedef void (* motor_gpio_callback)(uint16_t pin);
-typedef void (* timer_gpio_xd_callback)(void);
 typedef void (* timer_ctrl_timeout_callback)(void);
 
 typedef struct {
+    //保存电机执行指令之后的状态
     volatile MOTOR_STATUS status;     //电机当前状态 1=卧倒,2=前倾,3=直立,4=后倾
     volatile MOTOR_CMD action;     //命令
-
-//    volatile MOTOR_STATUS last_status;    //保存上一次的正常位置状态
+    volatile MOTOR_STATUS realStatus; //保存真实的地锁状态
+    
     MOTOR_STATUS can_stop; //开始运动时的位置状态，用来对电机上升时进行停止判断。
 
     motor_ctrl_callback         ctrl_cb;
@@ -33,23 +32,27 @@ typedef struct {
     timer_ctrl_timeout_callback ctrl_timer_cb;
 } Motor;
 
-void GPIO_MotorSenserInit(void);
-void GPIO_Motor_Init(uint8_t cmd);
+void GPIOMotorSenserInit(void);
+void GPIOMotorInit(uint8_t cmd);
 //电机控制函数
 MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd);
 //获取电机位置状态的函数
 MOTOR_STATUS MotorGetStatus(void);
 
-void motor_init(void);
+void MotorInit(void);
 
 //电机位置检测引脚中断开启和关闭
-void set_motor_gpio_normal(void);
-void set_motor_gpio_interrupt(void);
+void setMotorGpioNormal(void);
+void setMotorGpioInterrupt(void);
 
 void MotorSenceSwitch(bool b);
 //电机异常动作处理
-void MotorAbnormalCheck(Device *d);
-void MotorAbnormalProcess(Device *d);
+bool MotorAbnormalCheck(Device *d, bool flag);
+
+MOTOR_STATUS getMotorStatus(void); //主循环获取实时电机位置
+void resetMotorStatus(void);
+void setMotorInterrupt(void);
+void cancelMotorInterrupt(void);
+MOTOR_STATUS getMotorStatusInt(void); //中断获取实时电机位置
 
 #endif
-

@@ -2,69 +2,62 @@
 #include "stdint.h"
 #include "stm32f0xx.h"
 #include "user_config.h"
+#include "lora.h"
+#include "beep.h"
 
 extern RTC_HandleTypeDef hrtc;
 extern Device gDevice;
 
-void rtc_disable(void)
+void rtcCounter(void)
 {
-  HAL_RTC_DeactivateAlarm(&hrtc, RTC_ALARM_A);
+  RTC_TimeTypeDef sTime = {0};
+  RTC_DateTypeDef sDate = {0};
+  HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+  gDevice.u32GlobalTimeCount = 
+    ((uint32_t)sTime.Hours * 3600) + ((uint32_t)sTime.Minutes * 60) + ((uint32_t)sTime.Seconds);
+  HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 }
 
-/*
-  误差20%
-  定时10秒需要设置为12秒
-  定时20秒需要设置为24秒
-*/
-void rtc_set_timer(uint8_t time)
+static uint32_t g_u32RtcTime = 0; //防止cpu未休眠导致重复设置闹钟
+bool rtcSetTimer(uint8_t time)
 {
-  RTC_TimeTypeDef sTime;
-  RTC_DateTypeDef sDate;
-  RTC_AlarmTypeDef sAlarm;
-  
-  __HAL_RCC_LSI_ENABLE();
-  while(!__HAL_RCC_GET_FLAG(RCC_FLAG_LSIRDY));
-  
-  __HAL_RCC_RTC_ENABLE();
+  RTC_TimeTypeDef sTime = {0};
+  RTC_DateTypeDef sDate = {0};
+  RTC_AlarmTypeDef sAlarm = {0};
+  uint32_t counter_time = 0;
+  uint32_t counter_alarm = 0;
+  uint8_t u8Retry = 0;
 
-  hrtc.Instance = RTC;
-  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
-  hrtc.Init.AsynchPrediv = 127;
-  hrtc.Init.SynchPrediv = 255;
-  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
-  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
-  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
-  HAL_RTC_Init(&hrtc);
+  HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+  HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
+  counter_time = ((uint32_t)sTime.Hours * 3600) + ((uint32_t)sTime.Minutes * 60) + ((uint32_t)sTime.Seconds);
+  if (counter_time == g_u32RtcTime)
+  {
+    return false;    
+  }
+  g_u32RtcTime = counter_time;
+
+  counter_alarm = counter_time + time;
+  HAL_RTC_GetAlarm(&hrtc, &sAlarm, RTC_ALARM_A, RTC_FORMAT_BIN);
+  sAlarm.AlarmMask = RTC_ALARMMASK_DATEWEEKDAY;
+  sAlarm.AlarmTime.Hours   = (uint8_t)((counter_alarm / 3600) % 24);
+  sAlarm.AlarmTime.Minutes = (uint8_t)((counter_alarm % 3600) / 60);
+  sAlarm.AlarmTime.Seconds = (uint8_t)((counter_alarm % 3600) % 60);
   
-  sTime.Hours = 0x0;
-  sTime.Minutes = 0x0;
-  sTime.Seconds = 0x0;
-  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-  HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-  
-  sDate.WeekDay = RTC_WEEKDAY_MONDAY;
-  sDate.Month = RTC_MONTH_JANUARY;
-  sDate.Date = 0x1;
-  sDate.Year = 0x0;
-  HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
-  
-  sAlarm.AlarmTime.Hours = 0;
-  sAlarm.AlarmTime.Minutes = 0;
-  sAlarm.AlarmTime.Seconds = time;
-  sAlarm.AlarmTime.SubSeconds = 0;
-  sAlarm.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-  sAlarm.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
-  sAlarm.AlarmMask = RTC_ALARMMASK_NONE;
-  sAlarm.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
-  sAlarm.AlarmDateWeekDaySel = RTC_ALARMDATEWEEKDAYSEL_DATE;
-  sAlarm.AlarmDateWeekDay = 1;
-  sAlarm.Alarm = RTC_ALARM_A;
-  HAL_RTC_SetAlarm_IT(&hrtc, &sAlarm, RTC_FORMAT_BIN);
-  
-  HAL_RTCEx_SetCalibrationOutPut(&hrtc, RTC_CALIBOUTPUT_1HZ);
+  while (1)
+  {
+    if (HAL_OK == HAL_RTC_DeactivateAlarm(&hrtc, RTC_ALARM_A))
+    {
+      if (HAL_OK == HAL_RTC_SetAlarm_IT(&hrtc, &sAlarm, RTC_FORMAT_BIN))
+      { 
+        return true;
+      }
+    }
+    HAL_Delay(5);
+    u8Retry++;
+    if (u8Retry >= 3)
+    {
+      NVIC_SystemReset();
+    }
+  }  
 }
-
-
-
-

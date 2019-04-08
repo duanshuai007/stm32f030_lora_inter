@@ -20,19 +20,40 @@ typedef enum {
 }Lora_Mode;
 
 typedef struct {
-    uint16_t u16Addr;    
+  uint8_t u8Speedinair:3;
+  uint8_t u8Baud:3;
+  uint8_t u8Parity:2;
+} Byte2;
+
+typedef struct {
+  uint8_t u8SendDB:2;
+  uint8_t u8FEC:1;
+  uint8_t u8WakeUpTime:3;
+  uint8_t u8IOMode:1;
+  uint8_t u8TranferMode:1;
+} Byte4;
+
+//5 Bytes
+typedef struct {
+    //Byte0 Save or not save
+    SaveType saveType;
+    //Byte0-1
+    uint8_t u8AddrH;
+    uint8_t u8AddrL;
+    //Byte2
+//    uint8_t u8Parity;   //6-7bit
+//    uint8_t u8Baud;     //3-5bit        
+//    uint8_t u8Speedinair; //0-2bit
+    Byte2 sParaOne;
     //Byte3
-    uint8_t u8Parity;   //6-7bit
-    uint8_t u8Baud;     //3-5bit        
-    uint8_t u8Speedinair; //0-2bit
-    //Byte4
     uint8_t u8Channel;  //0-4 or 0-5 bit
-    //Byte5
-    uint8_t u8TranferMode;      //7bit 
-    uint8_t u8IOMode;           //6bit
-    uint8_t u8WakeUpTime;       //3-5bit
-    uint8_t u8FEC;              //2bit
-    uint8_t u8SendDB;           //0-1bit
+    //Byte4
+//    uint8_t u8TranferMode;      //7bit 
+//    uint8_t u8IOMode;           //6bit
+//    uint8_t u8WakeUpTime;       //3-5bit
+//    uint8_t u8FEC;              //2bit
+//    uint8_t u8SendDB;           //0-1bit
+    Byte4 sParaTwo;
 } LoraPar;
 
 //节点resp结构体 s:13+3
@@ -60,14 +81,10 @@ typedef struct {
 
 typedef struct {
     Lora_Mode mode;   //work mode
-    uint16_t  u16ServerID;
-    uint8_t   u8ServerCH;
+    uint16_t  u16ServerID; 
+    uint8_t   u8ServerCH; //server channel
     LoraPar   paramter;
-
-//    uint8_t   sbuff_size;
     uint8_t   rbuff_size;
-    
-//    uint8_t   *sbuff; //send buffer
     uint8_t   *rbuff; //receive buffer
 } LoraPacket;
 
@@ -78,19 +95,14 @@ void LoraModuleInit(void);
 
 void SetServer(uint16_t serverid, uint8_t ch);
 //When setting or reading parameters, the serial port must be no parity.
-void LoraWriteParamter(LoraPar *lp);
+void LoraWriteParamter(void);
 
 void LoraReadParamter(void);
 
 void LoraModuleITInit(void);
-//reset lora module
-uint8_t Lora_Reset(LoraPacket *lp);
-//generate normal data
-uint8_t GetSendData(uint8_t *sendbuff, MsgDevice *d);
-//generate recmd data
-uint8_t GetRecmdSendData(uint8_t *sendbuff, Device *d);
-//send data
-bool LoraSend(uint8_t *sbuff, uint8_t len);
+
+void LoraSendReCmd(void);
+void LoraSendResp(uint8_t cmd, uint8_t resp, uint32_t identify);
 
 /*
 *   判断模块是否空闲
@@ -101,5 +113,9 @@ bool LoraModuleIsIdle(void);
 *   Lora模块所对应的串口数据接收完成中断处理
 */
 void LoraModuleReceiveHandler(void);
+
+
+void LoraUartEnable(void);
+void LoraUartDisable(void);
 
 #endif

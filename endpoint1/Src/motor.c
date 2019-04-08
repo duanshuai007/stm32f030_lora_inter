@@ -8,19 +8,23 @@
 #include "ultra.h"
 #include "beep.h"
 
-Motor motor;
-
+extern Motor gMotor;
 extern Device gDevice;
+static bool bMotorBusy = false;
 
-//传感器的四个状态 旧版本地锁
-//up    down
-//1     0       后倾状态
-//0     0       直立状态
-//0     1       前倾状态
-//1     1       卧倒状态
+/* 
+  * 传感器的四个状态 旧版本地锁
+  * up    down
+  * 1     0       后倾状态
+  * 0     0       直立状态
+  * 0     1       前倾状态
+  * 1     1       卧倒状态
+  */
 
-//唤醒后再次进入休眠时关闭使用过的外设
-void GPIO_MotorSenserInit(void)
+/*
+  * 唤醒后再次进入休眠时关闭使用过的外设
+  */
+void GPIOMotorSenserInit(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct;
   /*Configure GPIO pins : PA6(K3) */
@@ -31,7 +35,7 @@ void GPIO_MotorSenserInit(void)
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 }
 
-void GPIO_Motor_Init(uint8_t cmd)
+void GPIOMotorInit(uint8_t cmd)
 {
   GPIO_InitTypeDef GPIO_InitStruct;
  
@@ -61,6 +65,7 @@ void GPIO_Motor_Init(uint8_t cmd)
     break;
   case HW_MOTOR_GET:
   case HW_ULTRA_GET:
+  case HW_DEVICE_HEART:
     /*Configure GPIO pins : PA4(K1) PA5(K2) */
     GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5;
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
@@ -74,11 +79,11 @@ void GPIO_Motor_Init(uint8_t cmd)
 
 static void motor_stop(void)
 {
-  HAL_GPIO_WritePin(GPIO_SENSOR_FORWARE, GPIO_SENSOR_FORWARE_PIN, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(GPIO_SENSOR_BACKWARD, GPIO_SENSOR_BACKWARD_PIN, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIO_MOTOR_FORWARE, GPIO_MOTOR_FORWARE_PIN, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIO_MOTOR_BACKWARD, GPIO_MOTOR_BACKWARD_PIN, GPIO_PIN_RESET);
 }
 
-void MotorSenceSwitch(bool b)
+static void motor_sence_switch(bool b)
 {
   if (true == b) {
     HAL_GPIO_WritePin(GPIO_SENSOR_SWITCH, GPIO_SENSOR_SWITCH_PIN, GPIO_PIN_SET);
@@ -88,7 +93,7 @@ void MotorSenceSwitch(bool b)
   }
 }
 
-static MOTOR_STATUS get_status(void)
+static MOTOR_STATUS motor_get_status(void)
 {
   GPIO_PinState pin1 = HAL_GPIO_ReadPin(GPIO_SENSOR_UP, GPIO_SENSOR_UP_PIN);
   GPIO_PinState pin2 = HAL_GPIO_ReadPin(GPIO_SENSOR_DOWN, GPIO_SENSOR_DOWN_PIN);
@@ -96,28 +101,28 @@ static MOTOR_STATUS get_status(void)
 #if defined(MODE_OLD)
   if (pin1 == GPIO_PIN_RESET) {
     if (pin2 == GPIO_PIN_RESET) {
-      return MOTOR_UP;
+      return MOTOR_UP;  //all low
     } else {
-      return MOTOR_QIANQING;
+      return MOTOR_QIANQING;  //pin1 reset pin2 set
     }
   } else {
     if (pin2 == GPIO_PIN_RESET) {
       return MOTOR_HOUQING;
     } else {
-      return MOTOR_DOWN;
+      return MOTOR_DOWN;  //all high
     }
   }
 #else
   if (GPIO_PIN_RESET == pin1) {   
     if (pin2 == GPIO_PIN_RESET) {
       return MOTOR_HOUQING;
-    } else if(pin2 == GPIO_PIN_SET) {
+    } else {
       return MOTOR_UP;
     }
   } else if(pin1 == GPIO_PIN_SET) {   
     if(pin2 == GPIO_PIN_RESET) {
       return MOTOR_DOWN;
-    } else if(pin2 == GPIO_PIN_SET) {
+    } else {
       return MOTOR_QIANQING;
     }
   }
@@ -126,32 +131,33 @@ static MOTOR_STATUS get_status(void)
 
 static bool motor_runrun(uint8_t state, MOTOR_CMD cmd)
 {
-  motor.action = cmd;
+  gMotor.action = cmd;
   
   if (MOTOR_CMD_UP == cmd) {
     if (MOTOR_HOUQING == state) {   //后倾需要反转
-      HAL_GPIO_WritePin(GPIO_SENSOR_FORWARE, GPIO_SENSOR_FORWARE_PIN, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(GPIO_SENSOR_BACKWARD, GPIO_SENSOR_BACKWARD_PIN, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(GPIO_MOTOR_FORWARE, GPIO_MOTOR_FORWARE_PIN, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(GPIO_MOTOR_BACKWARD, GPIO_MOTOR_BACKWARD_PIN, GPIO_PIN_SET);
       return true;
     } else if (MOTOR_DOWN == state || MOTOR_QIANQING == state) {   //前倾和卧倒需要正转
-      HAL_GPIO_WritePin(GPIO_SENSOR_FORWARE, GPIO_SENSOR_FORWARE_PIN, GPIO_PIN_SET);
-      HAL_GPIO_WritePin(GPIO_SENSOR_BACKWARD, GPIO_SENSOR_BACKWARD_PIN, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(GPIO_MOTOR_FORWARE, GPIO_MOTOR_FORWARE_PIN, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(GPIO_MOTOR_BACKWARD, GPIO_MOTOR_BACKWARD_PIN, GPIO_PIN_RESET);
       return true;
     } else {
-      motor.action = MOTOR_CMD_IDLE;
-      motor.ctrl_cb(ACTION_OK);
+      gMotor.action = MOTOR_CMD_IDLE;
+      gMotor.ctrl_cb(ACTION_OK);
       return false;
     }
   } else if (MOTOR_CMD_DOWN == cmd) {
     if (MOTOR_DOWN != state) {      //反转
-      HAL_GPIO_WritePin(GPIO_SENSOR_FORWARE, GPIO_SENSOR_FORWARE_PIN, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(GPIO_SENSOR_BACKWARD, GPIO_SENSOR_BACKWARD_PIN, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(GPIO_MOTOR_FORWARE, GPIO_MOTOR_FORWARE_PIN, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(GPIO_MOTOR_BACKWARD, GPIO_MOTOR_BACKWARD_PIN, GPIO_PIN_SET);
       return true;
     } else {
-      motor.action = MOTOR_CMD_IDLE;
-      motor.ctrl_cb(ACTION_OK);
+      gMotor.action = MOTOR_CMD_IDLE;
+      gMotor.ctrl_cb(ACTION_OK);
       return false;
     }
+  } else {
   }
   return false;
 }
@@ -171,71 +177,78 @@ static void mydelay(uint8_t delay)
 static void motor_last_process(MOTOR_STATUS status)
 {
   motor_stop();
-  rtc_disable();
-  motor.status = status;
-  motor.ctrl_cb(ACTION_OK);
-  motor.action = MOTOR_CMD_IDLE;
-  gDevice.bMotorUseRTC = false;
+  gMotor.status = status;
+  gMotor.realStatus = status;
+  gMotor.ctrl_cb(ACTION_OK);
+  gMotor.action = MOTOR_CMD_IDLE;
+  gDevice.bMotorUseRTCInter = false;
   gDevice.bHasMotorNormalInter = true;
 }
 
+/* 
+1 = 卧倒 2 = 前倾 3 = 直立 4 = 后倾
+*/
 void motor_gpio_cb(uint16_t pin)
 {
   MOTOR_STATUS status = MOTOR_OK;
   
+  //位置传感器电源使能后会出现错误的中断触发，如果不加判断
+  //就会导致获取到错误的状态信息。
+  if (MOTOR_CMD_IDLE == gMotor.action )
+    return;
+  
   //判断是否是检测引脚的中断 
   if ((GPIO_SENSOR_UP_PIN == pin ) || ( GPIO_SENSOR_DOWN_PIN == pin)) {
-    status = get_status();
-    //1 = 卧倒
-    //2 = 前倾
-    //3 = 直立
-    //4 = 后倾
-    if (MOTOR_CMD_UP == motor.action){
-      if ((MOTOR_UP == status) || (motor.can_stop == status)) {
+    status = getMotorStatusInt();
+
+    if (MOTOR_CMD_UP == gMotor.action){
+      if ((MOTOR_UP == status) || (gMotor.can_stop == status)) {
         motor_last_process(MOTOR_UP);
       }
-    } else if (MOTOR_CMD_DOWN == motor.action) {
+    } else if (MOTOR_CMD_DOWN == gMotor.action) {
       if (MOTOR_DOWN == status) {
         //modify 2019-03-18 15:50
         //系统被唤醒后还未初始化时钟，不能调用HAL_Delay()
-        mydelay(20);
-        if (get_status() == status) {
+        mydelay(15);
+        if (getMotorStatusInt() == status) {
           motor_last_process(MOTOR_DOWN);
         }
       }
-    } else if (MOTOR_CMD_DOWN_INTERNAL == motor.action) {
+    } else if (MOTOR_CMD_DOWN_INTERNAL == gMotor.action) {
       if(MOTOR_DOWN == status){
-//        mydelay(20);
-        if (get_status() == status) {
-//        status = get_status();
+        mydelay(15);
+        if (getMotorStatusInt() == status) {
           motor_last_process(MOTOR_DOWN);
         }
       }
     } else {
-      //none
+      //do nothing
     }
   }
 }
 
 static void motor_timer_ctrl_timeout_cb(void)
 {
-  if ( motor.action == MOTOR_CMD_IDLE ) 
+  if ( gMotor.action == MOTOR_CMD_IDLE ) 
     return;
 
   motor_stop();
-  motor.status = get_status();
-  motor.ctrl_cb((MOTOR_CB_TYPE)motor.status);
-  motor.action = MOTOR_CMD_IDLE;
-  gDevice.bMotorUseRTC = false;
+  gMotor.status = getMotorStatusInt();
+  gMotor.realStatus = gMotor.status;
+  gMotor.ctrl_cb((MOTOR_CB_TYPE)gMotor.status);
+  gMotor.action = MOTOR_CMD_IDLE;
   gDevice.bHasRtcInter = true;
+  gDevice.bMotorUseRTCInter = false;
 }
 
-//地锁接受命令执行后会调用该函数向服务器发送resp
+/*
+  * 地锁接受命令执行后会调用该函数向服务器发送resp
+  */
 static void motor_ctrl_cb(MOTOR_CB_TYPE m)
 {
   gDevice.u8MotorResp = m;
   
-  if ((motor.action == MOTOR_CMD_DOWN_INTERNAL) && (motor.status == MOTOR_DOWN)) {
+  if ((gMotor.action == MOTOR_CMD_DOWN_INTERNAL) && (gMotor.status == MOTOR_DOWN)) {
       gDevice.u8CmdDone = CMD_EXEC_DOING;
   } else {
     gDevice.u8CmdDone = CMD_EXEC_DONE;
@@ -245,44 +258,42 @@ static void motor_ctrl_cb(MOTOR_CB_TYPE m)
 MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd) 
 {
   uint16_t dat = 0;
-  uint8_t sleeptime = 0;
   //电机当前忙
-  if(motor.action != MOTOR_CMD_IDLE)
+  if(gMotor.action != MOTOR_CMD_IDLE)
     return MOTOR_RUNNING;
   
-  gDevice.bMotorAbnormal = false;
-  
-  rtc_disable();
   gDevice.bHasRtcInter = false;
   
-  motor.status = get_status();
+  gMotor.status = getMotorStatus();//gMotor.realStatus;
   
   //如果命令时UP，那么当前状态如果是DOWN或QIANQING的话，当达到HOUQING狂态就可以停止
   //如果命令是UP，那么当前状态是后倾的话，当达到前倾的时候就可以停止
   if(cmd == MOTOR_CMD_UP) {
-    if (( MOTOR_DOWN == motor.status ) || ( MOTOR_QIANQING == motor.status )){
-      motor.can_stop = MOTOR_HOUQING;
-    } else if ( MOTOR_HOUQING == motor.status) {
-      motor.can_stop = MOTOR_QIANQING;
+    if (( MOTOR_DOWN == gMotor.status ) || ( MOTOR_QIANQING == gMotor.status )){
+      gMotor.can_stop = MOTOR_HOUQING;
+    } else if ( MOTOR_HOUQING == gMotor.status) {
+      gMotor.can_stop = MOTOR_QIANQING;
+    } else {
+      //MOTOR_UP
     }
     
     //该状态为了防止超声波测量误差，需要向将地锁落下，然后重新抬起
-    if ( motor.status == MOTOR_QIANQING ) {
+    if ( gMotor.status == MOTOR_QIANQING ) {
       //将地锁落下
-      motor.action = MOTOR_CMD_DOWN_INTERNAL;
-      HAL_GPIO_WritePin(GPIO_SENSOR_FORWARE, GPIO_SENSOR_FORWARE_PIN, GPIO_PIN_RESET);
-      HAL_GPIO_WritePin(GPIO_SENSOR_BACKWARD, GPIO_SENSOR_BACKWARD_PIN, GPIO_PIN_SET);
-      rtc_set_timer(5);   //设置5秒定时唤醒
-      gDevice.bMotorUseRTC = true;
-//      return MOTOR_OK_NOSEND;
+      gMotor.action = MOTOR_CMD_DOWN_INTERNAL;
+      HAL_GPIO_WritePin(GPIO_MOTOR_FORWARE, GPIO_MOTOR_FORWARE_PIN, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(GPIO_MOTOR_BACKWARD, GPIO_MOTOR_BACKWARD_PIN, GPIO_PIN_SET);
+
+      gDevice.u8MotorRtcTimerInter = 4;
+      gDevice.bMotorUseRTCInter = true;
       return MOTOR_OK;
     }
     //使能超声波电源
 #if 1
-    if ( MOTOR_UP != motor.status ) {
+    if ( MOTOR_UP != gMotor.status ) {
       dat = ReadUltraData();
       
-      if ( 0xff == dat )
+      if ( ULTRA_READ_ERROR == dat )
         return MOTOR_ERROR_ULTRA;
       //单位:厘米
       if ( dat < gDevice.u8UltraSafeDistance ) {
@@ -293,16 +304,15 @@ MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd)
 #endif
   }
 
-  if (motor_runrun(motor.status, cmd) == true)
+  if (motor_runrun(gMotor.status, cmd) == true)
   {
     //电机控制超时定时器，这里使用rtc来实现
-    if ( motor.status == MOTOR_HOUQING ) {
-      sleeptime = 10;
+    if ( gMotor.status == MOTOR_HOUQING ) {
+      gDevice.u8MotorRtcTimerInter = 8;
     } else {
-      sleeptime = 6;
+      gDevice.u8MotorRtcTimerInter = 6;
     }
-    rtc_set_timer(sleeptime);   //电机动作超时定时
-    gDevice.bMotorUseRTC = true;
+    gDevice.bMotorUseRTCInter = true;
     
     return MOTOR_OK; 
   } else {
@@ -310,42 +320,31 @@ MOTOR_STATUS motor_conctrl(MOTOR_CMD cmd)
   }
 }
 
-static void motor_ctrl_cb_register(motor_ctrl_callback cb)
-{
-  motor.ctrl_cb = cb;
-}
-
-static void motor_gpio_cb_register(motor_gpio_callback cb)
-{
-  motor.gpio_cb = cb;
-}
-
-void motor_init(void)
+void MotorInit(void)
 {
   //使能传感器开关
-  MotorSenceSwitch(true);
+  motor_sence_switch(true);
   
   motor_stop();
   
-  motor.action = MOTOR_CMD_IDLE; //当前动作空闲
-  motor.status = get_status(); //电机初始化状态
-//  motor.last_status = motor.status;
+  gMotor.action = MOTOR_CMD_IDLE; //当前动作空闲
+  gMotor.status = getMotorStatus(); //电机初始化状态
+  //gMotor.realStatus = gMotor.status;
   //注册中断控制回调函数，被引脚中断回调函数调用
-  motor_ctrl_cb_register(motor_ctrl_cb);
+//  motor_ctrl_cb_register(motor_ctrl_cb);
+  gMotor.ctrl_cb = motor_ctrl_cb;
   //注册引脚中断回调函数，该函数为中断内调用。
-  motor_gpio_cb_register(motor_gpio_cb);
- 
-  motor.ctrl_timer_cb = motor_timer_ctrl_timeout_cb;
+//  motor_gpio_cb_register(motor_gpio_cb);
+  gMotor.gpio_cb = motor_gpio_cb;
+  gMotor.ctrl_timer_cb = motor_timer_ctrl_timeout_cb;
   
-  MotorSenceSwitch(false);
+  motor_sence_switch(false);
 }
 
+// public
 MOTOR_STATUS MotorGetStatus(void)
 {
-  if (MOTOR_CMD_IDLE != motor.action) {
-    return MOTOR_RUNNING;
-  }
-  return get_status();
+  return motor_get_status();
 }
 
 /*
@@ -360,11 +359,9 @@ MOTOR_STATUS MotorGetStatus(void)
 /*
 *   设置gpio为普通模式
 */
-void set_motor_gpio_normal(void)
+void setMotorGpioNormal(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct;
-  
-  //pa4 pa5
   GPIO_InitStruct.Pin = GPIO_PIN_4 | GPIO_PIN_5;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
@@ -373,7 +370,7 @@ void set_motor_gpio_normal(void)
 /*
 *   设置gpio为中断模式，边沿触发
 */
-void set_motor_gpio_interrupt(void)
+void setMotorGpioInterrupt(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct;
   GPIO_InitStruct.Pin = GPIO_PIN_4 | GPIO_PIN_5;
@@ -382,51 +379,88 @@ void set_motor_gpio_interrupt(void)
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 }
 
-void MotorAbnormalCheck(Device *d)
+//每次唤醒在主循环中只需实际获取电机状态一次
+MOTOR_STATUS getMotorStatus(void)
 {
-  MOTOR_STATUS status;
-  //如果当前正在执行电机运动指令
-  if ((d->u8Cmd == HW_MOTOR_UP) || (d->u8Cmd == HW_MOTOR_DOWN))
-    return;
-  //开启电源
-  GPIO_Motor_Init(HW_MOTOR_GET);
-  GPIO_MotorSenserInit();
-  MotorSenceSwitch(true);
-  
-  status = MotorGetStatus();
-  if (status != motor.status)
-  {
-    d->bMotorAbnormal = true;
+  if ((true == gDevice.bHasGetMotorStatus) || (true == bMotorBusy)) {
+    return gMotor.realStatus;
   }
-  MotorSenceSwitch(false);
+  
+  GPIOMotorInit(HW_MOTOR_GET);
+  GPIOMotorSenserInit();
+  motor_sence_switch(true);
+  gMotor.realStatus = motor_get_status();
+  gDevice.bHasGetMotorStatus = true;
+  motor_sence_switch(false);
+  
+  return gMotor.realStatus;
 }
 
-void MotorAbnormalProcess(Device *d)
+void resetMotorStatus(void)
 {
-  if (d->bMotorAbnormal == false)
-    return;
-  
-  d->bMotorAbnormal = false;
-  
-  if ((d->u8Cmd == HW_MOTOR_UP) || (d->u8Cmd == HW_MOTOR_DOWN) || (d->u8Cmd == HW_MOTOR_GET))
-    return;
-  
-  MOTOR_STATUS status;
-  MsgDevice md;
-  uint8_t len;
-  uint8_t sbuff[20];
+  gDevice.bHasGetMotorStatus = false;
+}
 
-  GPIO_Motor_Init(HW_MOTOR_GET);
-  GPIO_MotorSenserInit();
-  MotorSenceSwitch(true);
-  status = MotorGetStatus();
-  if ( motor.status != status ) {
-    motor.status = status;
-    md.u8Cmd = HW_MOTOR_ABNORMAL;
-    md.u8Resp = status;
-    md.u32Identify = 0xffffffff;
-    len = GetSendData(sbuff, &md);
-    LoraSend(sbuff, len);
+//lora up down
+void setMotorInterrupt()
+{
+  //地锁前倾时，先落下后抬起，不需要重复执行两遍初始化
+  if (bMotorBusy == true)
+    return;
+  
+  bMotorBusy = true;
+  GPIOMotorSenserInit();
+  motor_sence_switch(true);
+  GPIOMotorInit(HW_MOTOR_UP);
+  gMotor.realStatus = motor_get_status();
+  gDevice.bHasGetMotorStatus = true;
+}
+
+//main loop start
+void cancelMotorInterrupt()
+{
+  GPIOMotorInit(HW_MOTOR_GET);
+  motor_sence_switch(false);
+  bMotorBusy = false;
+}
+
+//motor interrupt
+MOTOR_STATUS getMotorStatusInt(void)
+{
+  gMotor.realStatus = motor_get_status();
+//  gDevice.bHasGetMotorStatus = true;
+  return gMotor.realStatus;
+}
+
+bool isMotorBusy(void)
+{
+  return bMotorBusy;
+}
+
+bool MotorAbnormalCheck(Device *pDev, bool flag)
+{
+  MOTOR_STATUS mStatus;
+  
+  if (flag)
+    return true;
+  
+#if 1
+  //如果当前正在执行电机运动指令，不进行异常动作检验，不检测心跳和超声波
+  if (isMotorBusy() == true)
+    return true;
+
+  mStatus = getMotorStatus();
+
+  //地锁在无指令时会循环判断地锁状态，如果发现状态变更，触发异常
+  if (mStatus != gMotor.status)
+  {
+    pDev->u32LastHeartTime = pDev->u32GlobalTimeCount;
+    pDev->u32LastCheckUltraTime = pDev->u32GlobalTimeCount;
+    gMotor.status = mStatus;
+    LoraSendResp(HW_MOTOR_ABNORMAL, mStatus, 0xffffffff);
+    return true;
   }
-  MotorSenceSwitch(false);
+  
+  return false;
+#endif
 }

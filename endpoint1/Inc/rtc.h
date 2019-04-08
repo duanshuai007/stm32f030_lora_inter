@@ -3,11 +3,13 @@
 
 #include "stdint.h"
 #include "stm32f0xx_hal.h"
+#include "user_config.h"
 
 extern RTC_HandleTypeDef hrtc;
 
-void rtc_set_timer(uint8_t time);
-
-void rtc_disable(void);
+bool rtcSetTimer(uint8_t time);
+void rtcDisable(void);
+uint32_t rtcGetTime(void);
+void rtcCounter(void);
 
 #endif

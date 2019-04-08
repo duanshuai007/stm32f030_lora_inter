@@ -41,6 +41,7 @@
 #include "stm32f0xx_hal.h"
 
 /* USER CODE BEGIN Includes */
+#include "stdlib.h"
 #include <string.h>
 #include "Lora.h"
 #include "beep.h"
@@ -51,11 +52,14 @@
 #include "rtc.h"
 #include "lora_datapool.h"
 #include "flash.h"
+#include "ultra.h"
 #include "user_config.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc;
+
+IWDG_HandleTypeDef hiwdg;
 
 RTC_HandleTypeDef hrtc;
 
@@ -65,15 +69,19 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 Device gDevice;
+Motor gMotor;
+LoraPacket gLoraPacket;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_USART1_UART_Init(void);
 static void MX_ADC_Init(void);
 static void MX_RTC_Init(void);
+static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_IWDG_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -81,7 +89,7 @@ static void MX_USART2_UART_Init(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
-void EnterLowPower(void);
+
 /* USER CODE END 0 */
 
 /**
@@ -92,11 +100,13 @@ void EnterLowPower(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-  uint16_t serverID, localID;
-  uint8_t sendCH, recvCH;
-  uint8_t sbuff[200];
-  uint8_t len;
-  uint16_t distance;
+  uint16_t u16Distance = 0; //flash双字节操作，所以设置u16而不是u8
+  uint16_t u16Timeinterval = 0; //同上
+  uint16_t u16ServerID = 0;
+  uint16_t u16LocalID = 0;
+  bool bIsMotorAction = false;
+  uint8_t u8SendCH = 0;
+  uint8_t u8RecvCH = 0;
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -112,103 +122,113 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-  
+
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USART1_UART_Init();
   MX_ADC_Init();
   MX_RTC_Init();
+  MX_USART1_UART_Init();
   MX_USART2_UART_Init();
+  MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
   //先关闭中断，不然位置检测模块上电后会导致触发一次异常动作
   HAL_NVIC_DisableIRQ(EXTI4_15_IRQn);
-  motor_init();
+  MotorInit();
   //低功耗模式下调试延时，如果不加很难再次刷程序
-  HAL_Delay(5000);
+  HAL_Delay(3000);
   //一定要再次打开中断，否则gpio的所有中断都被关闭了
   HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
   
   LoraModuleInit();
   
-  if (FLASH_Init(&serverID, &localID, &sendCH, &recvCH, &distance) == false) {
+  if (FLASH_Init(&u16ServerID, &u16LocalID, &u8SendCH, &u8RecvCH, &u16Distance, &u16Timeinterval) == false) {
     return -1;
   }
   
-  serverID = 4000;  //TEST USED
-  
-  LoraPar lp;
-  lp.u16Addr = localID;
-  lp.u8Baud = BAUD_57600;
-  
-  lp.u8Channel = recvCH;
-//  lp.u8Channel = (localID % 30);
-  
-  lp.u8FEC = FEC_ENABLE;
-  lp.u8IOMode = IOMODE_PP;
-  lp.u8Parity = PARITY_8O1;
-  lp.u8SendDB = SEND_20DB;
-  lp.u8Speedinair = SPEED_IN_AIR_19_2K;
-  lp.u8TranferMode = TRANSFER_MODE_DINGDIAN;
-  lp.u8WakeUpTime = WAKEUP_TIME_500MS;
-  LoraWriteParamter( &lp );
+//#define _TEST_
+
+#ifdef _TEST_
+  gLoraPacket.paramter.u8AddrH = 0;
+  gLoraPacket.paramter.u8AddrL = 8;
+  gLoraPacket.paramter.u8Channel = 27;
+  gLoraPacket.paramter.sParaOne.u8Baud = BAUD_57600;
+  u16ServerID = 4096;
+  u8SendCH = 28;
+#else
+  gLoraPacket.paramter.u8AddrH = u16LocalID / 0xff;
+  gLoraPacket.paramter.u8AddrL = u16LocalID % 0xff;
+  gLoraPacket.paramter.u8Channel = (u16LocalID % LORA_MAX_CHANNEL);
+  gLoraPacket.paramter.sParaOne.u8Baud = BAUD_57600;
+#endif
+ 
+  gLoraPacket.paramter.saveType = SAVE_IN_FLASH;
+  gLoraPacket.paramter.sParaOne.u8Parity = PARITY_8O1;
+  gLoraPacket.paramter.sParaOne.u8Speedinair = SPEED_IN_AIR_19_2K;
+  gLoraPacket.paramter.sParaTwo.u8FEC = FEC_ENABLE;
+  gLoraPacket.paramter.sParaTwo.u8IOMode = IOMODE_PP;
+  gLoraPacket.paramter.sParaTwo.u8SendDB = SEND_20DB;
+  gLoraPacket.paramter.sParaTwo.u8TranferMode = TRANSFER_MODE_DINGDIAN;
+  gLoraPacket.paramter.sParaTwo.u8WakeUpTime = WAKEUP_TIME_500MS;
+  LoraWriteParamter();
   
   //读取完参数之后lora设置为低功耗模式
   LoraReadParamter();
   
-  SetServer(serverID, sendCH);
+  SetServer(u16ServerID, u8SendCH);
   
-  UART_ReInit(&huart1);
-  LoraModuleITInit();
+  beep_ctrl(BEEP_ON);
+  HAL_Delay(100);
+  beep_ctrl(BEEP_OFF);
+  HAL_Delay(100);
+  beep_ctrl(BEEP_ON);
+  HAL_Delay(100);
+  beep_ctrl(BEEP_OFF);
+  HAL_Delay(100);
+  
+  //因为在CloseNotUsedPeriphClock中关闭了HSI时钟，
+  //所以在它之前需要调用一下Uart1的关闭方法
+  LoraUartDisable();
+  UltraUartDisable();
+  
   CloseNotUsedPeriphClock();
-  
+  //这个位置有疑问，放在上面rtc的第一次定时就会有问题
   memset(&gDevice, 0, sizeof(gDevice));
-  
-  gDevice.u8UltraSafeDistance = (uint8_t)distance;
+  gDevice.u8UltraSafeDistance = (uint8_t)u16Distance;
+  gDevice.u8UltraCheckTimeinterval = (uint8_t)u16Timeinterval;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  
   while (1)
   {
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
+    //清空获取过地锁位置的标志
+    HAL_IWDG_Refresh(&hiwdg);
 
-    if ((gDevice.bHasLoraInter == false) 
-        && (gDevice.bHasMotorNormalInter == false)
-        && (gDevice.bHasRtcInter == false))
-    {
-      EnterLowPower();
-    }
-    
+    resetMotorStatus();
+    bIsMotorAction = false;
+    EnterLowPower();
     //等待接收数据完成
     while(!LoraModuleIsIdle()){
       HAL_Delay(1);
     }
+    rtcCounter();
     
-    if (gDevice.bRegister == false) {
-      if (gDevice.u8Cmd == HW_DEVICE_HEART) {
-        gDevice.bRegister = true;
-      } else {
-        distance = gDevice.u8UltraSafeDistance;
-        memset(&gDevice, 0, sizeof(gDevice));
-        gDevice.u8UltraSafeDistance = distance;
-        continue;
-      }
-    }
-    
+    if ((gDevice.u8Cmd == HW_MOTOR_UP) || (gDevice.u8Cmd == HW_MOTOR_DOWN))
+      bIsMotorAction = true;
+
     //调用数据处理,数据在中断内已经处理了
     //判断系统唤醒类型，分别是adc中断唤醒，电机检测引脚中断唤醿
     //和aux引脚中断唤醒
     if (gDevice.bHasLoraInter) {
       gDevice.bHasLoraInter = false;
       ExecCMD(&gDevice);
-      if (gDevice.u8ReCmdNumber != 0) {
-        len = GetRecmdSendData(sbuff, &gDevice);
-        LoraSend(sbuff, len);
+      if (gDevice.u8ReCmdNumberInter != 0) {
+        LoraSendReCmd();
       }
     }
     
@@ -227,9 +247,26 @@ int main(void)
       }
     }
     
-    MotorAbnormalProcess(&gDevice);
-    MotorAbnormalCheck(&gDevice);
-    
+#if 1
+    // 如果检查到异常则不再处理心跳、超声定时上报
+    if ( false == MotorAbnormalCheck(&gDevice, bIsMotorAction)) {
+      MOTOR_STATUS mStatus = getMotorStatus();
+      if ( MOTOR_DOWN == mStatus) {
+#ifdef _TEST_
+        doCheckUltraByTimer(5);
+#else
+        doCheckUltraByTimer(gDevice.u8UltraCheckTimeinterval);
+#endif
+      } //end of  "MOTOR_DOWN == getMotorStatus()"
+      else {
+#ifdef _TEST_
+        doHeartByTimer(5, mStatus);
+#else
+        doHeartByTimer(SYSTEM_HEARTBEAT_CYC, mStatus);
+#endif
+      }
+    }// end of "false == MotorAbnormalCheck(&gDevice)"
+#endif
   }
   /* USER CODE END 3 */
 
@@ -341,12 +378,27 @@ static void MX_ADC_Init(void)
 
 }
 
+/* IWDG init function */
+static void MX_IWDG_Init(void)
+{
+
+  hiwdg.Instance = IWDG;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_128;
+  hiwdg.Init.Window = 3125;
+  hiwdg.Init.Reload = 3125;
+  if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+}
+
 /* RTC init function */
 static void MX_RTC_Init(void)
 {
 
   /* USER CODE BEGIN RTC_Init 0 */
-  
+
   /* USER CODE END RTC_Init 0 */
 
   RTC_TimeTypeDef sTime;
@@ -354,15 +406,15 @@ static void MX_RTC_Init(void)
   RTC_AlarmTypeDef sAlarm;
 
   /* USER CODE BEGIN RTC_Init 1 */
-  
+
   /* USER CODE END RTC_Init 1 */
 
     /**Initialize RTC Only 
     */
   hrtc.Instance = RTC;
   hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
-  hrtc.Init.AsynchPrediv = 127;
-  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.AsynchPrediv = 20;
+  hrtc.Init.SynchPrediv = 2000;
   hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
   hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
   hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
@@ -370,9 +422,6 @@ static void MX_RTC_Init(void)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
-  /* USER CODE BEGIN RTC_Init 2 */
-  
-  /* USER CODE END RTC_Init 2 */
 
     /**Initialize RTC and set the Time and Date 
     */
@@ -385,9 +434,6 @@ static void MX_RTC_Init(void)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
-  /* USER CODE BEGIN RTC_Init 3 */
-  
-  /* USER CODE END RTC_Init 3 */
 
   sDate.WeekDay = RTC_WEEKDAY_MONDAY;
   sDate.Month = RTC_MONTH_JANUARY;
@@ -398,9 +444,6 @@ static void MX_RTC_Init(void)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
-  /* USER CODE BEGIN RTC_Init 4 */
-  
-  /* USER CODE END RTC_Init 4 */
 
     /**Enable the Alarm A 
     */
@@ -419,9 +462,6 @@ static void MX_RTC_Init(void)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
-  /* USER CODE BEGIN RTC_Init 5 */
-  
-  /* USER CODE END RTC_Init 5 */
 
     /**Enable Calibration 
     */
@@ -429,9 +469,6 @@ static void MX_RTC_Init(void)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
-  /* USER CODE BEGIN RTC_Init 6 */
-
-  /* USER CODE END RTC_Init 6 */
 
 }
 
@@ -465,7 +502,7 @@ static void MX_USART2_UART_Init(void)
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.Mode = UART_MODE_RX;
   huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
   huart2.Init.OverSampling = UART_OVERSAMPLING_16;
   huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
@@ -501,8 +538,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_15|GPIO_PIN_4 
-                          |GPIO_PIN_5, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10|GPIO_PIN_15|GPIO_PIN_4|GPIO_PIN_5, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_SET);
@@ -538,20 +574,20 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB0 PB1 PB2 PB12 
-                           PB3 PB6 PB7 PB8 
-                           PB9 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_12 
-                          |GPIO_PIN_3|GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8 
-                          |GPIO_PIN_9;
+  /*Configure GPIO pins : PB0 PB1 PB2 PB11 
+                           PB12 PB3 PB6 PB7 
+                           PB8 PB9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_11 
+                          |GPIO_PIN_12|GPIO_PIN_3|GPIO_PIN_6|GPIO_PIN_7 
+                          |GPIO_PIN_8|GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB10 PB11 PB13 PB15 
-                           PB4 PB5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_13|GPIO_PIN_15 
-                          |GPIO_PIN_4|GPIO_PIN_5;
+  /*Configure GPIO pins : PB10 PB13 PB15 PB4 
+                           PB5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_13|GPIO_PIN_15|GPIO_PIN_4 
+                          |GPIO_PIN_5;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -570,22 +606,7 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void EnterLowPower(void)
-{
-  LowPowerInit(&gDevice);
-  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
-  //时钟配置清空
-  HAL_RCC_DeInit();
-  //HSI时钟使能
-  __HAL_RCC_DISABLE_IT(RCC_IT_HSIRDY);
-  __HAL_RCC_HSI_ENABLE();
-  while(!__HAL_RCC_GET_FLAG(RCC_FLAG_HSIRDY));
-  //配置时钟和DMA
-  SystemClock_Config();
-  //串口重新配置
-  UART_ReInit(&huart1);
-  LoraModuleITInit();
-}
+
 /* USER CODE END 4 */
 
 /**
@@ -616,7 +637,7 @@ void assert_failed(uint8_t* file, uint32_t line)
 { 
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
-  tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+     tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

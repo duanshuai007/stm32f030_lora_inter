@@ -49,7 +49,7 @@ uint16_t CRC16_IBM(uint8_t *puchMsg, uint8_t usDataLen)
   uint8_t wChar = 0;
   uint8_t i;
   
-  while (usDataLen--) 	
+  while (usDataLen--)
   {
     wChar = *(puchMsg++);
     InvertUint8(&wChar,&wChar);
