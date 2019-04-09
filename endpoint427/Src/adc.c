@@ -62,7 +62,7 @@ uint8_t get_adc_value(void)
   HAL_Delay(10);
   
 //  HAL_ADC_DeInit(&hadc);
-//  __HAL_RCC_ADC1_CLK_DISABLE();
+  __HAL_RCC_ADC1_CLK_DISABLE();
   
   return ret;
 }

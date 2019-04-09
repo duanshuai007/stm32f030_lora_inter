@@ -115,7 +115,7 @@ void EnterLowPower(void)
     LoraUartDisable();
 //    UltraUartDisable();
   
-    __HAL_RCC_ADC1_CLK_DISABLE();
+//    __HAL_RCC_ADC1_CLK_DISABLE();
   
     __HAL_RCC_PWR_CLK_ENABLE();
     __HAL_RCC_HSI_DISABLE();
@@ -204,7 +204,9 @@ void CloseNotUsedPeriphClock(void)
   __HAL_RCC_TIM17_CLK_DISABLE();
   __HAL_RCC_USART2_CLK_DISABLE();
   __HAL_RCC_WWDG_CLK_DISABLE();
-  
+    
+  __HAL_RCC_ADC1_CLK_DISABLE();
+    
   __HAL_RCC_SRAM_CLK_DISABLE();
   __HAL_RCC_FLITF_CLK_DISABLE();
   __HAL_RCC_DBGMCU_CLK_DISABLE();

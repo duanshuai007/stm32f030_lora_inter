@@ -44,9 +44,9 @@
 #include "ultra.h"
 
 extern LoraPacket gLoraPacket;
-extern uint8_t uart2_rbuff[4];
+//extern uint8_t uart2_rbuff[4];
 extern Motor gMotor;
-extern Device gDevice;
+//extern Device gDevice;
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -175,10 +175,7 @@ void USART1_IRQHandler(void)
   /* USER CODE END USART1_IRQn 0 */
   HAL_UART_IRQHandler(&huart1);
   /* USER CODE BEGIN USART1_IRQn 1 */
-  //空闲中断，仅仅接收会触发空闲中断
-//  if(__HAL_UART_GET_IT(&huart1,UART_IT_IDLE)!=RESET) {
-//    __HAL_UART_CLEAR_IT(&huart1, UART_CLEAR_IDLEF);
-//  }
+
   /* USER CODE END USART1_IRQn 1 */
 }
 
@@ -207,8 +204,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if ( huart->Instance == USART1 ) {
     LoraModuleReceiveHandler();
-  } else if ( huart->Instance == USART2 ) {
-//    UltraModuleRecviveHandler();
   }
 }
 

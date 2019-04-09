@@ -106,7 +106,7 @@ void UltraUartEnable(void)
 
 void UltraUartDisable(void)
 {
-  HAL_UART_Abort_IT(&huart2);
+//  HAL_UART_Abort_IT(&huart2);
   HAL_UART_DeInit(&huart2);
 }
 
@@ -118,26 +118,32 @@ void UltraUartDisable(void)
 uint8_t ReadUltraData(void)
 {
   uint16_t ret = 0;
+  HAL_StatusTypeDef hStatus;
   
   UltraUartEnable();
   
   //使能超声波电源
   HAL_GPIO_WritePin(GPIO_ULTRASONIC, GPIO_ULTRASONIC_PIN, GPIO_PIN_RESET);
 
-  if (HAL_OK != HAL_UART_Receive(&huart2, uart2_rbuff, sizeof(uart2_rbuff), 2000))
-  {
-    //禁止超声波电源
-    HAL_GPIO_WritePin(GPIO_ULTRASONIC, GPIO_ULTRASONIC_PIN, GPIO_PIN_SET);
-    HAL_Delay(5);
-    UltraUartDisable();
-    return ULTRA_READ_ERROR;
-  }
+  hStatus = HAL_UART_Receive(&huart2, uart2_rbuff, sizeof(uart2_rbuff), 2000);
+  
+//  if (HAL_OK != HAL_UART_Receive(&huart2, uart2_rbuff, sizeof(uart2_rbuff), 2000))
+//  {
+//    //禁止超声波电源
+//    HAL_GPIO_WritePin(GPIO_ULTRASONIC, GPIO_ULTRASONIC_PIN, GPIO_PIN_SET);
+//    HAL_Delay(5);
+//    UltraUartDisable();
+//    return ULTRA_READ_ERROR;
+//  }
 
   //禁止超声波电源
   HAL_GPIO_WritePin(GPIO_ULTRASONIC, GPIO_ULTRASONIC_PIN, GPIO_PIN_SET);
   HAL_Delay(5);
   UltraUartDisable();
 
+  if (hStatus != HAL_OK)
+    return ULTRA_READ_ERROR;
+  
   ret = UltraModuleRecviveHandler();
   
   ret = ret / 10;  //转换为厘米单位
@@ -148,8 +154,9 @@ uint8_t ReadUltraData(void)
 
 uint8_t UltraCheckTask(void)
 {
-  uint8_t result = 0;
-  result = ReadUltraData();
-  
-  return result;
+//  uint8_t result = 0;
+//  result = ReadUltraData();
+//  
+//  return result;
+  return ReadUltraData();
 }
